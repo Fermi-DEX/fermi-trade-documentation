@@ -14,6 +14,18 @@ evaluating the system. It explains both *how Fermi-v1 works* and
 *why the design is viable* — start with
 [02 - Architecture](02-architecture.md) for the system-level case.
 
+## Human-readable Pages and Wiki
+
+For a more abstract, non-reference introduction, this repository also
+includes:
+
+- **[GitHub Pages source](docs/index.md)** — a short project guide for
+  the whole system, architecture, aims, trust model, and market
+  microstructure benefits. To publish it, enable GitHub Pages from the
+  `main` branch and `/docs` folder.
+- **[GitHub Wiki mirror](wiki/Home.md)** — the same high-level material
+  formatted for GitHub Wiki page names and sidebar navigation.
+
 ## How the docs are organized
 
 The structure mirrors the kind of layout you would find on
