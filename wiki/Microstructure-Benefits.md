@@ -1,44 +1,105 @@
 # Microstructure Benefits
 
-Fermi-v1's market microstructure is built around a per-market
-first-come-first-served execution queue and a price-time-priority order
-book.
+Market microstructure is the set of rules that determines how orders
+become trades. In a perp venue, microstructure affects spreads,
+liquidity, execution quality, adverse selection, and user trust.
 
-## First-come-first-served sequencing
+Fermi-v1's microstructure is built around three ideas:
 
-Each market has its own sequence. Earlier queued orders execute before
-later queued orders in that same market.
+- First-come, first-served sequencing.
+- Price-time-priority matching.
+- Fast optimistic feedback with on-chain settlement.
 
-This makes priority easier to audit and gives market participants a
-clearer view of where they stand in line.
+## First-come, first-served sequencing
 
-## Commit before reveal
+Every market has a sequence. Earlier sequenced intents are ahead of later
+intents in that market.
 
-The relayer commits a hash before the full order payload is revealed.
-That means order priority is locked before order details become public on
-chain.
+This gives traders a simple answer to a difficult question: why did this
+order get priority?
 
-This reduces same-market payload-based reordering and makes the
-fairness claim mechanical rather than discretionary.
+On a venue with opaque internal ordering, users may have to trust the
+operator's logs. On Fermi-v1, sequence state is part of the public
+execution path.
 
-## Price-time priority
+## Reduced payload-based reordering
 
-Better prices trade first. At the same price, older orders trade first.
+Commit/reveal reduces the opportunity to reorder after seeing order
+contents.
 
-This is the standard model many market makers expect, and it supports
-more predictable liquidity provision.
+The sequence is committed with a hash before the full payload is revealed
+on chain. That means an order's place in line is fixed before public
+payload visibility.
 
-## Deterministic matching
+This is not a claim that all possible market manipulation disappears. It
+is a narrower and more useful claim: same-market ordering is constrained
+by a public mechanism rather than purely by an operator's discretion.
 
-The matcher is deterministic. The same book, oracle inputs, and intent
-should produce the same result for independent observers.
+## Familiar price-time priority
 
-This is what allows the optimistic read layer to give useful early
-feedback without becoming the settlement authority.
+The order book follows the standard price-time idea:
 
-## Benefits for liquidity
+- Better prices trade first.
+- At the same price, older orders trade first.
 
-The design can improve quoting conditions because makers can reason about
-queue position, priority, event trails, and settlement rules. Better
-confidence can support tighter spreads and deeper books, though it does
-not remove market or inventory risk.
+This is valuable because market makers already know how to reason about
+that system. Queue position has economic meaning. Improving price has
+economic meaning. Resting liquidity has a predictable priority model.
+
+## Better conditions for market makers
+
+Market makers quote tighter when they trust the venue's execution rules.
+They widen spreads when they face hidden priority, unexplained fills, or
+unbounded adverse selection.
+
+Fermi-v1 helps by making several things more inspectable:
+
+- Where an order sits in sequence.
+- Whether the order was committed before reveal.
+- How the book prioritizes resting orders.
+- What events were emitted for fills and cancels.
+- What final state was settled on chain.
+
+That does not eliminate inventory risk or price risk, but it can reduce
+uncertainty about the venue itself.
+
+## Better experience for takers
+
+Takers benefit from a venue where matching rules are understandable and
+where order status is clear.
+
+A taker can see that an order was accepted, sequenced, optimistically
+processed, and then confirmed. If the order fails, expires, or is
+dropped, that status can be traced rather than hidden behind a vague
+"order rejected" message.
+
+## More credible optimistic UX
+
+Fast feedback is only useful if it is believable. Fermi-v1's optimistic
+view is credible because it is based on deterministic matching and
+committed queue state.
+
+The venue can give users early feedback while still reconciling to
+confirmed chain state. This is different from a purely off-chain matching
+engine where the operator's database is both the fast path and the final
+truth.
+
+## Per-market throughput and isolation
+
+Per-market queues make the system easier to scale and reason about. Heavy
+activity in one market does not require every market to share the same
+global ordering lane.
+
+This improves practical liveness and monitoring. A problem can often be
+localized to a market and sequence instead of becoming a mystery across
+the whole exchange.
+
+## The broader benefit
+
+Fermi-v1's microstructure tries to make the venue itself less of a source
+of uncertainty.
+
+Traders will always face market risk. Market makers will always face
+inventory and adverse-selection risk. The goal is to reduce unnecessary
+venue risk: hidden ordering, unclear status, opaque settlement, and
+operator-controlled finality.

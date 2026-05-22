@@ -1,50 +1,114 @@
-# Architecture
+# System Architecture
 
-Fermi-v1 has four main parts:
+Fermi-v1 separates the exchange into authority, sequencing, execution,
+and observation layers.
 
-- The on-chain settlement program.
-- The relayer.
-- The executor.
-- The Continuum harness and fanout layer.
+This separation is the main architectural idea. The system can deliver a
+fast user experience because off-chain services do useful work early, but
+the final authority remains the on-chain program.
+
+## Component map
+
+```
+Trader / SDK / UI / bot
+        |
+        | signed intent
+        v
+Relayer / sequencer
+        |
+        | hash commit and sequence
+        v
+On-chain execution queue
+        |
+        | reveal request
+        v
+Executor
+        |
+        | verified payload
+        v
+On-chain Fermi-v1 program
+        |
+        | events and state
+        v
+Continuum harness and fanout
+```
 
 ## On-chain settlement program
 
-The Solana program is the source of truth. It owns collateral, perp
-markets, order books, margin, funding, fees, liquidation, bankruptcy
-handling, and the execution queue.
+The on-chain program is the exchange's source of truth. It owns the
+state that matters economically:
 
-Every value-changing action is settled by this program.
+- User collateral and account health.
+- Perp positions and open orders.
+- Order books and event queues.
+- Funding accrual and fee accounting.
+- Liquidation and bankruptcy handling.
+- The execution queue that governs order sequencing.
 
-## Relayer
+When a trade settles, it settles here. When a margin check passes or
+fails, it passes or fails here. When a liquidation changes an account,
+that change happens here.
 
-The relayer receives signed order intents, validates them off chain,
-assigns a market sequence, and commits a hash of each intent to the
-on-chain queue.
+This is what makes the architecture non-custodial. Off-chain services can
+help submit and observe transactions, but they do not maintain a hidden
+ledger.
 
-It can provide speed and batching. It cannot move funds or alter a signed
-payload after commit.
+## Sequencing layer
 
-## Executor
+The sequencing layer decides the order in which same-market intents
+enter the book. It is made of two parts:
 
-The executor reveals queued intents to the on-chain program. The program
-checks the hash, verifies the user signature, checks replay protection,
-and runs the order through the matching engine.
+- The relayer, which receives signed intents and assigns sequences.
+- The on-chain execution queue, which records those sequences and enforces
+  execution order.
 
-## Continuum harness and fanout
+The important distinction is that the relayer proposes order, while the
+queue makes it public and enforceable. Once an intent hash and sequence
+are committed, the relayer cannot silently rewrite that item into a
+different order.
 
-The harness mirrors chain state and produces a low-latency optimistic
-view. Fanout distributes events to many clients.
+## Execution layer
 
-Neither component can change settlement. They are read and distribution
-layers.
+Committed queue entries still need to be revealed. The executor performs
+that work. It submits the full payload for the next queued sequence so
+the on-chain program can verify it and run the matching path.
 
-## Order lifecycle
+The executor is operationally important but not economically privileged.
+It does not decide the contents of an order, and it does not settle
+outside the program. It is a progress engine.
 
-1. Trader signs an order intent.
-2. Relayer validates and assigns a sequence.
-3. Relayer commits the intent hash on chain.
-4. Harness shows the accepted intent optimistically.
-5. Executor reveals the full payload.
-6. On-chain program verifies and executes.
-7. Events are emitted and streamed.
-8. Confirmed state reconciles with the optimistic view.
+## Observation layer
+
+The Continuum harness and fanout services make the system usable at
+trading speed.
+
+Continuum tracks confirmed chain state and also builds an optimistic view
+that includes accepted, sequenced intents before they finalize. Fanout
+distributes events to many users, UIs, and bots.
+
+This layer is powerful for experience but powerless for settlement. If it
+is wrong, users may see bad information temporarily, but the on-chain
+program will not honor a view simply because the harness published it.
+
+## Why this architecture works
+
+The design works because each component has a narrow job:
+
+- The program enforces rules.
+- The relayer makes submission fast.
+- The queue makes ordering auditable.
+- The executor drives progress.
+- Continuum makes state legible quickly.
+- Fanout scales event delivery.
+
+No off-chain component needs custody. No read layer needs authority. No
+operator database becomes the balance sheet.
+
+## Read the next pages
+
+- [Order Lifecycle](Order-Lifecycle) explains the full path from signed
+  order to confirmed fill.
+- [Sequencer and Execution Queue](Sequencer-and-Execution-Queue)
+  explains first-come, first-served ordering.
+- [Optimistic Finality and Continuum](Optimistic-Finality-and-Continuum)
+  explains how the system can feel fast before chain finality.
