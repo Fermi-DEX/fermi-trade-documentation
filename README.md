@@ -5,7 +5,7 @@ exchange built on Solana. A single on-chain program owns the order
 book, the cross-margin risk engine, funding, and liquidation; a
 per-market commit/reveal execution queue sequences every order
 first-come-first-served; and an off-chain relayer plus optimistic
-"Continuum" harness give traders sub-second feedback while on-chain
+"Continuum" harness give traders millisecond-level feedback while on-chain
 finality follows behind.
 
 This site is the user-facing reference for **traders, market makers,
@@ -14,11 +14,6 @@ evaluating the system. It explains both *how Fermi-v1 works* and
 *why the design is viable* — start with
 [02 - Architecture](02-architecture.md) for the system-level case.
 
-## How the docs are organized
-
-The structure mirrors the kind of layout you would find on
-[docs.phoenix.trade](https://docs.phoenix.trade/) — concept first,
-mechanics next, API last.
 
 ### Getting started
 - **[01 - Overview](01-overview.md)** — What Fermi-v1 is, what makes
