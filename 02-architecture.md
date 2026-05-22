@@ -7,7 +7,7 @@ feels as fast as a centralized exchange.**
 
 It is written for two audiences at once — engineers who need the
 mental model before reading the mechanics chapters, and evaluators
-(prospective large users, market makers, partners, investors) who
+(prospective large users, market makers etc.) who
 need to judge whether the system is sound and viable.
 
 ## The problem Fermi-v1 solves
