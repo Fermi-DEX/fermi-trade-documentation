@@ -9,7 +9,7 @@ first-come-first-served; and an off-chain relayer plus optimistic
 finality follows behind.
 
 This site is the user-facing reference for **traders, market makers,
-liquidators, integrators, and prospective partners or investors**
+liquidators, integrators, and prospective partners**
 evaluating the system. It explains both *how Fermi-v1 works* and
 *why the design is viable* — start with
 [02 - Architecture](02-architecture.md) for the system-level case.
