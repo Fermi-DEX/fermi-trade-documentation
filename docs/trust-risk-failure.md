@@ -13,22 +13,23 @@ component can do.
 ## What users trust
 
 Users primarily trust the deployed on-chain program. That program defines
-custody, matching, margin, funding, liquidation, and queue behavior.
+custody, order placement, cancels, matching, margin, funding,
+liquidation, and queue behavior.
 
 Users also rely on off-chain services for speed and convenience, but
 those services are deliberately limited. They can delay, refuse, or show
-bad information for a short time. They cannot settle a fake fill, move
+bad information for a short time. They cannot execute a fake fill, move
 funds, or change a signed order after the fact.
 
 ## Component powers
 
 | Component | Can do | Cannot do |
 |---|---|---|
-| On-chain program | Enforce settlement, matching, risk, funding, liquidation, and queue rules. | Act outside deployed code. |
+| On-chain program | Enforce order placement, cancels, matching, risk, funding, liquidation, and queue rules. | Act outside deployed code. |
 | Relayer | Accept intents, pre-check them, assign sequences, commit hashes. | Move funds, alter signed payloads, replay consumed intents, reorder after commit. |
 | Executor | Reveal committed intents and drive execution. | Change the payload without failing hash checks. |
-| Harness | Mirror state, simulate optimistic outcomes, serve APIs and streams. | Change on-chain state or force settlement. |
-| Fanout | Broadcast events to many clients. | Create events or settle trades. |
+| Harness | Mirror state, simulate optimistic outcomes, serve APIs and streams. | Change on-chain state or force execution. |
+| Fanout | Broadcast events to many clients. | Create events or execute trades. |
 | Trader | Sign orders, manage collateral, place and cancel orders. | Mutate another user's account without authorization. |
 
 ## Main risks
@@ -79,7 +80,7 @@ Fermi-v1 does not promise risk-free leverage, guaranteed liquidity,
 perfect oracle behavior, or zero latency. It also does not remove all
 forms of market risk.
 
-The promise is narrower and more concrete: custody and settlement live in
-public on-chain code, order sequencing is mechanically verifiable, and
-off-chain speed services are useful without becoming the exchange's
-ultimate authority.
+The promise is narrower and more concrete: custody, order book state,
+matching, cancels, fills, and risk live in public on-chain code; order
+sequencing is mechanically verifiable; and off-chain speed services are
+useful without becoming the exchange's execution authority.

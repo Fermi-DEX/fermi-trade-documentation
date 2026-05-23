@@ -70,12 +70,13 @@ mechanical guarantees:
 Better confidence can translate into tighter spreads, deeper books, or
 more durable quoting behavior.
 
-## Better user experience without hidden settlement
+## Better user experience without off-chain execution
 
 Fast feedback usually comes from an off-chain matching engine. In
 Fermi-v1, the fast feedback comes from optimistic reads over a
 deterministic on-chain system. This gives users a CEX-like interaction
-loop without making the off-chain layer the final authority.
+loop without making the off-chain layer the matching engine or final
+authority.
 
 ## Per-market isolation
 

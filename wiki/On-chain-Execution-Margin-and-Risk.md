@@ -1,11 +1,12 @@
-# Settlement, Margin, and Risk
+# On-chain Execution, Margin, and Risk
 
-Fermi-v1's speed layer is useful only because the settlement layer is
-authoritative. The on-chain program is where positions, collateral,
-margin, funding, fees, liquidation, and bankruptcy are enforced.
+Fermi-v1's speed layer is useful only because execution is authoritative
+on chain. The on-chain program is where order placement, cancels,
+matching, book updates, positions, collateral, margin, funding, fees,
+liquidation, and bankruptcy are enforced.
 
-This page explains the risk system at a conceptual level rather than
-describing formulas or account layouts.
+This page explains the execution and risk system at a conceptual level
+rather than describing formulas or account layouts.
 
 ## Cross-margin accounts
 
@@ -31,8 +32,9 @@ Different health flavors are used for different decisions:
 - Recovery should move an account back into a safer region.
 
 The important conceptual point is that risk checks are not only an
-off-chain courtesy. The relayer may pre-check an order for speed, but the
-program still enforces health on chain.
+off-chain courtesy. The relayer may pre-check an order for speed, and
+Continuum may simulate its effect, but the program still enforces health
+when the order executes on chain.
 
 ## Funding and mark behavior
 
@@ -40,7 +42,7 @@ Perpetual futures need funding because they do not expire. Funding is the
 mechanism that pushes perp prices and spot/oracle reference prices toward
 each other over time.
 
-Fermi-v1 computes and settles funding through the program. Traders and
+Fermi-v1 computes and applies funding through the program. Traders and
 integrators can observe funding state and reconcile changes through
 public market data and account state.
 
@@ -66,18 +68,20 @@ needs a deterministic answer for tail events. The important user-facing
 point is that the loss-handling path is part of the program rules rather
 than an opaque operator decision after the fact.
 
-## Why risk belongs on chain
+## Why execution and risk belong on chain
 
-If matching is on chain but risk is off chain, users still depend on an
-operator database for the most important question: whether accounts are
-solvent and what balances mean.
+If custody is on chain but matching is off chain, users still depend on
+an operator database for the most important market action: which orders
+traded, posted, or canceled. If matching is on chain but risk is off
+chain, users still depend on an operator database for whether accounts
+are solvent and what balances mean.
 
-Fermi-v1 keeps the risk engine with settlement so fills, margin changes,
-funding, and liquidation are all part of the same public state machine.
+Fermi-v1 keeps matching, book mutation, risk, funding, and liquidation in
+the same public state machine.
 
 That design gives integrators a clean reconciliation target. A bot may
-use the relayer and Continuum for speed, but its accounting can still
-settle back to chain state.
+use the relayer and Continuum for speed, but its accounting and order
+state can still reconcile back to chain state.
 
 ## What users should understand
 
@@ -88,5 +92,5 @@ Funding can be costly. Large orders can suffer slippage. Congestion can
 delay transactions.
 
 The benefit is not that leverage becomes safe. The benefit is that the
-rules for leverage, settlement, and liquidation are inspectable and
-enforced by program state.
+rules for order execution, leverage, accounting, and liquidation are
+inspectable and enforced by program state.

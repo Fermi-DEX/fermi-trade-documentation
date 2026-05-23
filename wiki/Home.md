@@ -6,15 +6,17 @@ with the parts builders and users want from on-chain systems:
 
 - Fast order acknowledgement and live market data.
 - Transparent, auditable sequencing.
-- Self-custody and on-chain settlement.
-- A familiar price-time-priority order book.
-- A risk engine that can be inspected and reconciled against public
-  state.
+- Self-custody with on-chain order placement, matching, cancels, fills,
+  margin, and liquidation.
+- A familiar price-time-priority order book that lives in program state.
+- A risk engine and event trail that can be inspected and reconciled
+  against public state.
 
-The core design choice is separation of authority from convenience. The
-on-chain program owns settlement. The relayer, executor, Continuum
-harness, and fanout services make the system fast and usable, but they do
-not become the final authority over balances, fills, or risk.
+The core design choice is separation of execution from observation.
+Execution is on chain: order placement, matching, book updates, cancels,
+funding, risk checks, and liquidations all run through the deployed
+program. Off-chain services sequence, submit, simulate, and distribute
+state, but their simulation is non-binding.
 
 ## The one-page mental model
 
@@ -29,17 +31,17 @@ Relayer assigns a market sequence and commits a hash
 On-chain execution queue locks ordering
           |
           v
-Executor reveals the payload and drives execution
+Executor submits a reveal transaction
           |
           v
-On-chain program settles the fill, book update, risk check, and events
+On-chain program verifies, matches, places/cancels, updates risk, and emits events
           |
           v
 Continuum and fanout publish optimistic and confirmed views
 ```
 
 The result is a market where the user experience can be fast while the
-settlement path remains verifiable.
+entire execution path remains on chain and verifiable.
 
 ## Who this wiki is for
 
@@ -63,7 +65,7 @@ and what properties they create.
 - [Sequencer and Execution Queue](Sequencer-and-Execution-Queue)
 - [Relayer and Executor](Relayer-and-Executor)
 - [Optimistic Finality and Continuum](Optimistic-Finality-and-Continuum)
-- [Settlement, Margin, and Risk](Settlement-Margin-and-Risk)
+- [On-chain Execution, Margin, and Risk](On-chain-Execution-Margin-and-Risk)
 - [Market Data and Integration Surfaces](Market-Data-and-Integration-Surfaces)
 - [Microstructure Benefits](Microstructure-Benefits)
 - [Trust, Risk, and Failure Modes](Trust-Risk-and-Failure-Modes)
@@ -77,9 +79,11 @@ transparent, but interaction often feels slow because users wait for
 block confirmation before seeing meaningful feedback.
 
 Fermi-v1 tries to avoid that trade-off. The on-chain program is the
-settlement engine. The off-chain services are acceleration and
-distribution layers. They can help users submit, observe, and simulate
-orders quickly, but they cannot rewrite the chain's final state.
+exchange engine: it owns the order book, runs matching, applies cancels,
+updates positions, checks risk, and emits the authoritative events. The
+off-chain services are acceleration and distribution layers. They can
+help users submit, observe, and simulate orders quickly, but they cannot
+execute trades off chain or rewrite the chain's final state.
 
 ## Short glossary
 
@@ -97,9 +101,10 @@ first-served order before matching.
 Executor: The service that reveals committed intents and drives the
 on-chain execution step.
 
-Continuum harness: The off-chain read and simulation layer that serves
-optimistic and confirmed state.
+Continuum harness: The off-chain read and simulation layer that serves a
+non-binding optimistic view plus confirmed on-chain state.
 
 Optimistic finality: The user-facing confidence that an accepted,
-sequenced intent will settle as predicted, even before final on-chain
-confirmation.
+sequenced intent will execute as predicted, even before final on-chain
+confirmation. The confidence comes from deterministic on-chain execution,
+not from off-chain authority.

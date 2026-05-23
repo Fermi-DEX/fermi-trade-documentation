@@ -1,11 +1,13 @@
 # Sequencer and Execution Queue
 
 The sequencer is the part of the system that decides "who is next" for a
-market. In Fermi-v1, sequencing is deliberately split between an
-off-chain relayer and an on-chain execution queue.
+market. Sequencing is always prior to execution. On Solana, some
+sequencing exists at the leader and transaction-ordering layer. Fermi-v1
+adds a market-aware Continuum sequencing layer and binds its output into
+an on-chain execution queue.
 
-The relayer makes sequencing fast. The execution queue makes sequencing
-auditable and enforceable.
+The relayer makes sequencing fast and explicit. The execution queue makes
+sequencing auditable and enforceable before the on-chain matcher runs.
 
 ## What sequencing achieves
 
@@ -20,7 +22,8 @@ Without a clear rule, users face several risks:
 - A market maker cannot reason cleanly about queue position.
 - A trader cannot audit why a later order traded before an earlier one.
 
-Fermi-v1's answer is a per-market first-come, first-served sequence.
+Fermi-v1's answer is a per-market first-come, first-served sequence that
+controls entry into the on-chain execution path.
 
 ## Per-market ordering
 
@@ -71,8 +74,8 @@ users can trace what happened to an order.
 
 The queue does not guarantee that every user gets perfect service from
 the relayer. A relayer can still refuse to accept an order or be
-unavailable. That is a censorship and availability problem, not a
-settlement rewrite problem.
+unavailable. That is a censorship and availability problem, not an
+off-chain execution or state-rewrite problem.
 
 Fermi-v1 addresses this with a direct fallback path so users are not
 completely dependent on the fast path.
@@ -96,14 +99,17 @@ From a market maker's perspective, the useful output is a more
 predictable priority model. Queue position is not a hidden operator-side
 claim. It is tied to public sequence state.
 
-## Why this is different from a normal off-chain sequencer
+## Why this is different from ordinary off-chain sequencing
 
-Many systems have a sequencer. The distinction in Fermi-v1 is that the
-sequencer's work is bound into an on-chain queue before execution.
+Every chain-mediated market has sequencing somewhere. Without Continuum,
+ordering is still influenced by leaders, mempools, transaction arrival,
+priority fees, and client routing. The distinction in Fermi-v1 is that
+market sequencing is made explicit and then bound into an on-chain queue
+before execution.
 
 The relayer can make ordering decisions at admission time. It cannot then
 secretly reinterpret those decisions once order contents and market
-conditions are known.
+conditions are known, and it cannot run the match off chain.
 
 That is the design goal: fast admission, public ordering, deterministic
-execution.
+on-chain execution.

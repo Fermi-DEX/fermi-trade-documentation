@@ -3,10 +3,10 @@
 Optimistic finality is the part of Fermi-v1 that makes the system feel
 fast before the chain has finished confirming everything.
 
-The phrase does not mean that the off-chain view is final in a legal or
-settlement sense. It means that the system can provide a high-confidence,
+The phrase does not mean that the off-chain view executes trades or
+becomes final. It means that the system can provide a high-confidence,
 low-latency prediction of what a sequenced order will do, then reconcile
-that prediction against confirmed chain state.
+that prediction against confirmed on-chain execution.
 
 ## The latency problem
 
@@ -20,7 +20,8 @@ less attractive.
 
 Purely on-chain interaction often struggles here because the UI only
 knows what happened after a transaction lands. Fermi-v1 adds an
-optimistic read layer so users can see useful state earlier.
+optimistic read layer so users can see useful state earlier, while the
+order placement, cancel, and match still happen on chain.
 
 ## What Continuum does
 
@@ -29,7 +30,7 @@ state over APIs and streams.
 
 It can show two categories of state:
 
-Confirmed state: What has already settled on chain.
+Confirmed state: What has already executed and confirmed on chain.
 
 Optimistic state: Confirmed state plus accepted, sequenced intents that
 are expected to execute soon.
@@ -37,6 +38,9 @@ are expected to execute soon.
 The optimistic view is useful because the on-chain matching logic is
 deterministic. If Continuum has the same relevant inputs, it can preplay
 the intent and predict the result before the final transaction confirms.
+That preplay is non-binding simulation. It is correct by virtue of the
+determinism introduced by canonical intents, sequencing, and program
+logic, not because Continuum has matching authority.
 
 ## Why optimism is credible
 
@@ -75,10 +79,10 @@ For integrators:
 
 ## What optimism does not mean
 
-Optimistic finality is not the same as final settlement.
+Optimistic finality is not off-chain execution.
 
 An optimistic fill is not a final fill until the on-chain transaction
-settles. A good interface should communicate status clearly: accepted,
+executes. A good interface should communicate status clearly: accepted,
 optimistic, confirmed, rejected, expired, or dropped.
 
 The confirmed view always wins. If an oracle update, account condition,
@@ -106,5 +110,6 @@ In a well-functioning market, the user sees:
 3. Optimistic book/account update.
 4. Confirmed fill or order status.
 
-The interaction feels similar to a centralized exchange, but the final
-settlement path is still on chain.
+The interaction feels similar to a centralized exchange, but the order
+book, matching engine, placements, cancels, fills, risk checks, and final
+state transitions are still on chain.

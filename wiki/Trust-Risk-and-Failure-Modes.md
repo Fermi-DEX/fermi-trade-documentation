@@ -1,23 +1,24 @@
 # Trust, Risk, and Failure Modes
 
 Fermi-v1's trust model is based on a simple principle: the on-chain
-program is authoritative, while off-chain services are helpful but
-limited.
+program is authoritative for execution, while off-chain services are
+helpful but limited.
 
 That does not mean there is no trust. It means trust is scoped. Users
-trust the deployed program for settlement and risk rules. They rely on
-operators for service quality, latency, and availability.
+trust the deployed program for order placement, matching, cancels, fills,
+accounting, and risk rules. They rely on operators for service quality,
+sequencing assistance, latency, and availability.
 
 ## Component powers
 
 | Component | Can do | Cannot do |
 |---|---|---|
-| On-chain program | Settle trades, enforce matching, compute health, update balances, run liquidation. | Act outside deployed code. |
-| Relayer | Accept intents, pre-check requests, assign market sequences, commit hashes. | Move funds, alter signed payloads, settle fake fills. |
+| On-chain program | Place and cancel orders, run matching, emit fills, compute health, update balances, run liquidation. | Act outside deployed code. |
+| Relayer | Accept intents, pre-check requests, assign market sequences, commit hashes. | Move funds, alter signed payloads, create fake fills. |
 | Execution queue | Lock ordering and constrain reveal order. | Guarantee that a relayer accepts every user. |
-| Executor | Reveal queued payloads and drive progress. | Change the committed payload or bypass program checks. |
-| Continuum harness | Mirror state, simulate optimistic outcomes, serve APIs. | Make optimistic state final. |
-| Fanout | Broadcast events to many clients. | Create settlement events or alter chain state. |
+| Executor | Submit reveal transactions and drive progress. | Change the committed payload, match off chain, or bypass program checks. |
+| Continuum harness | Mirror state, simulate optimistic outcomes, serve APIs. | Execute orders or make optimistic state final. |
+| Fanout | Broadcast events to many clients. | Create fills or alter chain state. |
 | Trader | Sign orders, manage collateral, cancel, withdraw, liquidate when eligible. | Mutate another user's account without authorization. |
 
 ## Main trust assumptions
@@ -25,8 +26,8 @@ operators for service quality, latency, and availability.
 ### Program correctness
 
 The largest technical trust assumption is that the on-chain program is
-correct. Bugs in matching, health, settlement, liquidation, funding, or
-accounting can have direct economic consequences.
+correct. Bugs in matching, order placement, cancels, health, liquidation,
+funding, or accounting can have direct economic consequences.
 
 ### Oracle correctness and availability
 
@@ -41,7 +42,7 @@ convenient.
 
 ### Chain availability
 
-Final settlement depends on Solana transaction processing. Congestion,
+Final execution depends on Solana transaction processing. Congestion,
 priority fee dynamics, or RPC issues can affect confirmation latency.
 
 ## Failure modes
@@ -64,15 +65,15 @@ only gateway.
 
 Committed intents may wait longer before reveal.
 
-Mitigation: execution can be run by other parties, and recovery logic can
-advance past expired or invalid items.
+Mitigation: reveal transactions can be submitted by other parties, and
+recovery logic can advance past expired or invalid items.
 
 ### Continuum unavailable
 
 Optimistic state and convenient APIs may be unavailable.
 
 Mitigation: confirmed chain state still exists. Trading may be less
-ergonomic, but settlement is not rewritten.
+ergonomic, but execution is not rewritten.
 
 ### Fanout unavailable
 
@@ -92,7 +93,7 @@ market conditions.
 Confirmation latency can rise.
 
 Mitigation: optimistic views can soften the user-experience impact, but
-they do not remove the need for final on-chain settlement.
+they do not remove the need for final on-chain execution.
 
 ## What the system deliberately does not promise
 
@@ -106,9 +107,10 @@ Fermi-v1 does not promise:
 - Immunity from all MEV or all adverse selection.
 - No smart contract risk.
 
-The promise is narrower: custody and final settlement live in public
-program state, same-market ordering is mechanically constrained, and
-off-chain services do not become the exchange's hidden authority.
+The promise is narrower: custody, order book state, matching, cancels,
+fills, and risk live in public program state; same-market ordering is
+mechanically constrained; and off-chain services do not become the
+exchange's hidden execution engine.
 
 ## Practical evaluation checklist
 

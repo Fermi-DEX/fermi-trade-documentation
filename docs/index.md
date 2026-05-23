@@ -8,17 +8,18 @@ title: Fermi-v1 Project Guide
 [Microstructure](microstructure-benefits.md) | [Trust and Risk](trust-risk-failure.md)
 
 Fermi-v1 is a non-custodial perpetual futures exchange on Solana. It
-keeps custody, matching, margin, funding, and liquidation on chain, while
-using off-chain services only to make the system fast to submit to and
-easy to observe.
+keeps custody, order placement, cancels, matching, margin, funding, and
+liquidation on chain, while using off-chain services only to make the
+system fast to submit to and easy to observe.
 
 The project is built around a simple split:
 
-- The Solana program is the source of truth.
+- The Solana program is the source of truth for execution.
 - The relayer sequences signed orders into a public queue.
-- The executor reveals queued orders and drives settlement.
-- The Continuum harness gives traders a low-latency view of what is
-  about to happen on chain.
+- The executor submits reveal transactions that trigger on-chain
+  execution.
+- The Continuum harness gives traders a low-latency, non-binding
+  simulation of what is about to happen on chain.
 
 This site is the abstract guide. It is meant for humans who need the
 project's shape before reading formulas, account layouts, or API
@@ -43,7 +44,8 @@ because every interaction waits for block confirmation.
 
 Fermi-v1 tries to keep the useful parts of both models:
 
-- Self-custody and settlement are enforced by deployed on-chain code.
+- Self-custody, matching, cancels, fills, and risk checks are enforced by
+  deployed on-chain code.
 - Same-market ordering is first-come-first-served through a public
   commit/reveal queue.
 - The order book is price-time priority, not an opaque auction.

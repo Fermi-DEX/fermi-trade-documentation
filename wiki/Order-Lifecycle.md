@@ -1,11 +1,11 @@
 # Order Lifecycle
 
 An order in Fermi-v1 passes through several stages. Each stage has a
-different purpose: user authorization, sequencing, visibility, execution,
-settlement, and reconciliation.
+different purpose: user authorization, sequencing, visibility, on-chain
+execution, confirmation, and reconciliation.
 
 The lifecycle is important because it explains how Fermi-v1 can provide
-fast feedback without making the off-chain path final.
+fast feedback without making the off-chain path executable or final.
 
 ## Stage 1: The user signs an intent
 
@@ -34,8 +34,8 @@ freshness, risk pre-checks, reduce-only behavior, and basic request
 validity.
 
 This is a convenience and latency feature, not the ultimate security
-boundary. The same kind of checks still matter on chain at execution
-time.
+boundary. The same kind of checks still matter on chain when the order is
+actually executed.
 
 What this achieves:
 
@@ -79,8 +79,8 @@ Once an intent is accepted and sequenced, the Continuum harness can show
 an optimistic update. It can tell the trader that the order is accepted,
 where it sits, and what the deterministic matcher predicts.
 
-This is not final settlement. It is an early, useful prediction from a
-read layer that mirrors the exchange state.
+This is not execution. It is an early, useful prediction from a read layer
+that mirrors the exchange state.
 
 What this achieves:
 
@@ -103,7 +103,7 @@ What this achieves:
 - The program confirms that the order is exactly what was committed.
 - Execution remains tied to the user's signature.
 
-## Stage 7: The on-chain program executes and settles
+## Stage 7: The on-chain program executes
 
 The on-chain program performs the actual market action. Depending on the
 order and the book, the order may fill, post, partially fill and post,
@@ -114,7 +114,8 @@ events for fills and book changes.
 
 What this achieves:
 
-- Settlement happens in public program state.
+- Matching, placement, cancels, fills, and account changes happen in
+  public program state.
 - Fills and account changes are not operator-side records.
 - Events become the basis for reconciliation.
 
@@ -126,7 +127,7 @@ correct, the trader experiences the confirmation as reconciliation rather
 than new information.
 
 If something changed between optimism and confirmation, the confirmed
-view wins.
+on-chain execution result wins.
 
 What this achieves:
 
@@ -140,7 +141,7 @@ The lifecycle gives Fermi-v1 three properties at once:
 
 - Speed: accepted intents are visible before finality.
 - Fairness: same-market order is committed before reveal.
-- Settlement integrity: final state is produced by the on-chain program.
+- Execution integrity: final state is produced by the on-chain program.
 
 That combination is the main difference between Fermi-v1 and a venue
 whose speed comes from an opaque off-chain matching database.

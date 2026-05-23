@@ -8,7 +8,7 @@ Fermi-v1's microstructure is built around three ideas:
 
 - First-come, first-served sequencing.
 - Price-time-priority matching.
-- Fast optimistic feedback with on-chain settlement.
+- Fast optimistic feedback with on-chain execution.
 
 ## First-come, first-served sequencing
 
@@ -58,7 +58,7 @@ Fermi-v1 helps by making several things more inspectable:
 - Whether the order was committed before reveal.
 - How the book prioritizes resting orders.
 - What events were emitted for fills and cancels.
-- What final state was settled on chain.
+- What final state was confirmed on chain.
 
 That does not eliminate inventory risk or price risk, but it can reduce
 uncertainty about the venue itself.
@@ -82,7 +82,8 @@ committed queue state.
 The venue can give users early feedback while still reconciling to
 confirmed chain state. This is different from a purely off-chain matching
 engine where the operator's database is both the fast path and the final
-truth.
+truth. In Fermi-v1, the optimistic path predicts; the on-chain program
+executes.
 
 ## Per-market throughput and isolation
 
@@ -101,5 +102,5 @@ of uncertainty.
 
 Traders will always face market risk. Market makers will always face
 inventory and adverse-selection risk. The goal is to reduce unnecessary
-venue risk: hidden ordering, unclear status, opaque settlement, and
+venue risk: hidden ordering, unclear status, opaque matching, and
 operator-controlled finality.

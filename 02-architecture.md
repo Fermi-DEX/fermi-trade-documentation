@@ -17,17 +17,18 @@ A perpetual-futures exchange has to do four things well:
 1. **Match orders fairly** — earlier orders should get filled
    first, and nobody should be able to jump the queue or
    front-run.
-2. **Settle trustlessly** — users should never have to hand
-   custody of funds to an operator.
+2. **Execute trustlessly** — users should never have to hand custody,
+   matching, or risk enforcement to an operator.
 3. **Feel fast** — traders expect millisecond feedback, not
    block-time feedback.
 4. **Stay live** — the exchange should keep working even when
    individual off-chain services fail or misbehave.
 
-On-chain order books usually get (1) and (2) but fail (3): every
-action waits for block confirmation. Centralized exchanges get (3)
-but fail (1) and (2): you trust the operator's matching engine and
-custody. Fermi-v1 is architected so you do not have to choose.
+On-chain order books usually get (1) and (2) but fail (3): every action
+waits for block confirmation. Centralized exchanges get (3) but fail (1)
+and (2): you trust the operator's matching engine, sequencing, risk
+database, and custody. Fermi-v1 is architected so you do not have to
+choose.
 
 ## The four components
 
@@ -51,7 +52,7 @@ custody. Fermi-v1 is architected so you do not have to choose.
             │    + 3. reveal         │                      │
             ▼                        │                      │
    ┌──────────────────────────────────────────────────────────────────┐
-   │              FERMI-V1 ON-CHAIN SETTLEMENT PROGRAM                  │
+   │                FERMI-V1 ON-CHAIN EXCHANGE PROGRAM                  │
    │                                                                    │
    │   ExecutionQueueV5  →  matching engine  →  risk engine            │
    │   (FCFS sequencing)    (FIFO order book)   (cross-margin health)  │
@@ -64,29 +65,31 @@ custody. Fermi-v1 is architected so you do not have to choose.
                               Solana mainnet-beta
 ```
 
-### 1. The on-chain settlement program
+### 1. The on-chain exchange program
 
 This is the **only authority**. It is a Solana program that owns:
 
 - The **execution queue** (`ExecutionQueueV5`) — a per-market,
   first-come-first-served sequencer.
 - The **matching engine** — a price-time-priority FIFO order book.
+- The **order actions** — placement, cancels, matching, event
+  consumption, and book mutation.
 - The **risk engine** — cross-margin health, funding, liquidation,
   bankruptcy resolution.
 - All **value-bearing state** — `Group`, `Bank` (collateral),
   `FermiAccount` (your positions), `PerpMarket`, `BookSide`,
   `EventQueue`.
 
-Every fill, every funding payment, every liquidation happens here,
-in a transaction recorded on the public ledger. Nothing off-chain
-can move your funds, change a fill, or reorder a trade. The
-off-chain components exist purely to make the on-chain program
-**fast to use** and **fast to observe** — they have no special
-powers.
+Every order placement, cancel, match, fill, funding payment, and
+liquidation happens here, in a transaction recorded on the public ledger.
+Nothing off-chain can move your funds, change a fill, or execute a trade.
+The off-chain components exist to make the on-chain program **fast to
+use**, **explicitly sequenced**, and **fast to observe** — they have no
+matching authority.
 
-This is the bedrock of the trust model: if every off-chain
-component disappeared tomorrow, your funds would be exactly where
-the chain says they are, and you could still interact with the
+This is the bedrock of the trust model: if every off-chain component
+disappeared tomorrow, your funds, orders, and positions would be exactly
+where the chain says they are, and you could still interact with the
 program directly (see [21 - Direct Fallback Pool](21-direct-fallback.md)).
 
 ### 2. The relayer (off-chain sequencer)
@@ -129,9 +132,9 @@ pool (component note below).
 
 ### 3. The executor (off-chain crank)
 
-A committed intent is just a hash on chain; it has not executed
-yet. The **executor** is the off-chain worker that finishes the
-job. It:
+A committed intent is just a hash on chain; it has not executed yet. The
+**executor** is the off-chain worker that submits the reveal transaction
+that lets the on-chain program finish the job. It:
 
 1. Picks up committed intents in sequence order.
 2. Builds a **reveal** transaction containing the full intent
@@ -165,19 +168,20 @@ Crucially, the harness publishes **two views**:
 
 - **Confirmed view** — state derived purely from finalized
   on-chain transactions. This is ground truth; it is what you
-  settle and reconcile against.
+  reconcile against.
 - **Optimistic view** — the confirmed view *plus* the intents the
   relayer has already accepted but which have not yet been
   finalized on chain. Because the matching engine is deterministic
   and the harness can replay an accepted intent against its
   mirror, the optimistic view predicts the on-chain outcome
-  **before the block lands**.
+  **before the block lands**. That replay is non-binding simulation,
+  not off-chain execution.
 
 The optimistic view is what gives a trader sub-second feedback:
 "your order is sequenced at position N and, against the current
-book, it fills 1.4 SOL at \$150.2." Confirmation follows a beat
-later and — because the same deterministic matcher runs in both
-places — matches the prediction.
+book, it is predicted to fill 1.4 SOL at \$150.2." Confirmation follows a
+beat later and — because the same deterministic matcher is simulated by
+the harness and then executed on chain — matches the prediction.
 
 The **fanout** service sits in front of the harness's event stream
 and re-broadcasts it to many subscribers at once, so thousands of
@@ -261,7 +265,7 @@ hard to get any other way:
 |---|---|
 | **Fair ordering (FCFS)** | One on-chain sequence per market; commit-before-reveal hides payloads until ordering is locked. |
 | **Low perceived latency** | The optimistic harness predicts fills from accepted intents in milliseconds; deterministic matching guarantees the prediction holds. |
-| **Trustless settlement** | The on-chain program is the sole authority; off-chain components have zero custody and zero ordering power post-commit. |
+| **Fully on-chain execution** | The on-chain program is the sole authority for order placement, cancels, matching, fills, risk, and accounting; off-chain components have zero custody and no matching authority. |
 | **Censorship resistance** | If the relayer won't sequence you, the direct fallback pool lets you enter the queue on chain yourself. |
 | **Throughput** | Per-market queues are independent, so markets commit and execute in parallel; commits are batched up to 64 at a time. |
 | **Capital efficiency** | A single cross-margin `FermiAccount` backs positions across every market; collateral is not fragmented per market. |
@@ -273,9 +277,9 @@ diagram: **FCFS fairness from the on-chain queue, plus
 centralized-exchange-like responsiveness from the optimistic
 harness.** On-chain books are usually fair but slow to interact
 with; centralized books are fast but require trust. Fermi-v1's
-separation of concerns — authority on chain, sequencing in a
-verifiable queue, speed in a powerless read layer — is what lets it
-offer both at once.
+separation of concerns — execution on chain, sequencing made explicit in
+a verifiable queue, speed in a powerless simulation/read layer — is what
+lets it offer both at once.
 
 ## The trust model, stated plainly
 
@@ -284,10 +288,10 @@ each party do to me?" The answer:
 
 | Party | Can do | Cannot do |
 |---|---|---|
-| **On-chain program** | Everything — it is the authority. It is open-source and audited; its behavior is fixed by deployed bytecode. | Act outside its code. Upgrades are governance-gated. |
+| **On-chain program** | Order placement, cancels, matching, fills, risk, accounting, and liquidation — it is the authority. It is open-source and audited; its behavior is fixed by deployed bytecode. | Act outside its code. Upgrades are governance-gated. |
 | **Relayer** | Choose which order to commit; refuse service. | Alter, reorder-after-commit, replay, or forge your orders; touch your funds. |
-| **Executor** | Drive reveals; choose timing. | Change payloads (hash check); wedge a market (autodrop watchdog); move funds. |
-| **Harness / fanout** | Read and predict state; serve it fast. | Change any state; force the program to honor a prediction. |
+| **Executor** | Submit reveal transactions; choose timing. | Change payloads (hash check); match off chain; wedge a market (autodrop watchdog); move funds. |
+| **Harness / fanout** | Read and predict state; serve it fast. | Change any state; execute orders; force the program to honor a prediction. |
 | **Another trader / validator** | Submit their own orders; build blocks. | See your order contents before sequencing; reorder same-market intents; front-run committed flow. |
 | **You** | Sign and submit your own intents; withdraw your own funds; liquidate undercollateralized accounts. | Affect anyone else's account without their signature. |
 

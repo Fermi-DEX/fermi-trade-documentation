@@ -26,21 +26,23 @@ On-chain Fermi-v1 program <-------+
 Executor
 ```
 
-## On-chain settlement program
+## On-chain exchange program
 
-The Solana program is the source of truth. It owns:
+The Solana program is the source of truth for execution. It owns:
 
 - Collateral accounts and balances.
 - Perp markets and order books.
 - Matching and event queues.
+- Order placement, cancel, and consume-event paths.
 - Cross-margin health calculations.
 - Funding, fees, liquidation, insurance, and bankruptcy logic.
 - The execution queue that orders pending intents before they touch the
   book.
 
-Every value-changing action has to pass through this program. This is
-what makes the venue non-custodial: the off-chain system can help submit
-and observe transactions, but it cannot settle outside the program.
+Every value-changing action and every market action has to pass through
+this program. This is what makes the venue fully on chain: the off-chain
+system can help sequence, submit, simulate, and observe transactions, but
+it cannot place, cancel, match, fill, or liquidate outside the program.
 
 ## Relayer
 
@@ -58,20 +60,22 @@ the reveal check.
 The executor takes committed queue items and reveals the full payloads to
 the on-chain program. The program recomputes the hash, checks the user
 signature, checks replay protection, and dispatches the order into the
-matching engine.
+on-chain matching engine.
 
 The executor is a crank. It drives progress, but it cannot invent a fill
-or change the signed order. If execution stalls, recovery paths let the
-queue advance past expired or invalid items.
+or change the signed order. It submits transactions; it does not match
+off chain. If execution stalls, recovery paths let the queue advance past
+expired or invalid items.
 
 ## Continuum harness and fanout
 
-The Continuum harness is the fast read layer. It mirrors on-chain state
-and can also show an optimistic view that includes accepted intents that
-have not finalized yet.
+The Continuum harness is the fast read and simulation layer. It mirrors
+on-chain state and can also show an optimistic view that includes
+accepted intents that have not finalized yet. That optimistic view is
+non-binding; it is useful because the on-chain matcher is deterministic.
 
 The fanout service distributes events to many users and bots. It is a
-scaling layer, not a source of truth.
+scaling layer, not a source of truth and not an execution venue.
 
 ## Order lifecycle
 
@@ -93,10 +97,12 @@ The architecture gives each concern its own place:
 
 - Authority lives on chain.
 - Sequencing is public and per market.
-- Latency is handled by off-chain services.
+- Latency is improved by off-chain sequencing, submission, simulation,
+  and streams.
 - Observability is handled by streams and traceable events.
 - Recovery is explicit instead of hidden inside an operator database.
 
-The important point is that convenience does not become custody. The
-off-chain components can improve the trading experience, but the market's
-rules are enforced by the on-chain program.
+The important point is that convenience does not become execution
+authority. The off-chain components can improve the trading experience,
+but order placement, cancels, matching, fills, and risk checks are
+enforced by the on-chain program.

@@ -37,10 +37,10 @@ Every term used elsewhere in these docs.
 - **CommitItemV5** — The 96-byte ring-buffer entry storing one
   committed intent: hash, sequence, ingress slot, expiry, status, retries.
 - **Confirmed view** — Continuum harness state derived only from
-  on-chain confirmed transactions. Safe to settle on.
+  on-chain confirmed transactions. Safe to reconcile against.
 - **Continuum harness** — Off-chain read / optimistic layer that
   publishes optimistic and confirmed views of the orderbook +
-  accounts. Has no authority over settlement. See
+  accounts. Has no authority over execution. See
   [02 - Architecture](02-architecture.md).
 - **CTM** — Cooperative Transaction Model. The relayer is the
   "trusted-but-verifiable" sequencer; users sign intents, relayer

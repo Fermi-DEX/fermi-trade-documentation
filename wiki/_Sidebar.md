@@ -5,7 +5,7 @@
 * [Sequencer and Execution Queue](Sequencer-and-Execution-Queue)
 * [Relayer and Executor](Relayer-and-Executor)
 * [Optimistic Finality and Continuum](Optimistic-Finality-and-Continuum)
-* [Settlement, Margin, and Risk](Settlement-Margin-and-Risk)
+* [On-chain Execution, Margin, and Risk](On-chain-Execution-Margin-and-Risk)
 * [Market Data and Integration Surfaces](Market-Data-and-Integration-Surfaces)
 * [Microstructure Benefits](Microstructure-Benefits)
 * [Trust, Risk, and Failure Modes](Trust-Risk-and-Failure-Modes)

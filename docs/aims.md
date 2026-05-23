@@ -14,12 +14,12 @@ The aim is not only to make another order book. The aim is to show that a
 perp venue can be:
 
 - Fast enough for active traders.
-- Transparent enough for independent verification.
+- Transparent enough for independent verification of execution.
 - Self-custodial enough that users do not depend on an exchange balance
   sheet.
 - Structured enough for market makers to quote with confidence.
-- Resilient enough that off-chain services can fail without rewriting
-  settled history.
+- Resilient enough that off-chain services can fail without rewriting the
+  order book, fills, or account history.
 
 ## Why this matters
 
@@ -27,8 +27,8 @@ A perp exchange needs four properties at the same time:
 
 1. Fair ordering. Earlier orders should not be jumped after their content
    is known.
-2. Trustless settlement. A fill, margin change, funding payment, or
-   liquidation should be settled by public code.
+2. Trustless execution. Placement, cancel, match, fill, margin change,
+   funding payment, or liquidation should be performed by public code.
 3. Low-latency feedback. Traders need to know quickly whether an order
    was accepted, sequenced, filled, posted, or rejected.
 4. Liveness. A single server should not be able to freeze the whole
@@ -55,11 +55,12 @@ market a public sequence, so users can reason about order priority by
 market and sequence number instead of trusting an invisible matching
 server.
 
-### Separate prediction from settlement
+### Separate prediction from execution
 
 The Continuum harness can predict what an accepted order should do
 against a mirrored book. That prediction is useful for user experience,
-but final settlement still comes from the on-chain program.
+but the actual placement, cancel, match, fill, and risk update still come
+from the on-chain program.
 
 ### Prefer mechanical fairness
 
@@ -77,7 +78,7 @@ microstructure, and better confidence that quotes cannot be rearranged
 after submission.
 
 Integrators get APIs and streams for trading workflows while still being
-able to reconcile against on-chain state.
+able to reconcile execution against on-chain state.
 
 Liquidators get public health rules and permissionless liquidation paths.
 

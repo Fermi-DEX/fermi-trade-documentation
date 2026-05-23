@@ -1,15 +1,17 @@
 # 01 · Overview
 
-Fermi-v1 is a **non-custodial, on-chain perpetual-futures exchange** on
-Solana. Traders self-custody collateral, sign their own orders, and
-settle every fill on a public ledger. There is no off-chain matching
-engine, no off-chain risk database, no escrow account.
+Fermi-v1 is a **non-custodial, fully on-chain perpetual-futures exchange**
+on Solana. Traders self-custody collateral and sign their own orders;
+order placement, cancels, matching, fills, risk checks, funding, and
+liquidation all execute through the deployed program. There is no
+off-chain matching engine, no off-chain risk database, no escrow account.
 
 Fermi-v1 is built around four cleanly separated components:
 
-1. The **on-chain settlement program** — a Solana program that owns
-   the order book, the matching engine, the risk engine, funding,
-   and liquidation. It is the single source of truth.
+1. The **on-chain exchange program** — a Solana program that owns
+   order placement, cancels, the order book, the matching engine, the
+   risk engine, funding, and liquidation. It is the single source of
+   truth for execution.
 2. A **per-market commit/reveal execution queue** (the v5 queue)
    built into that program, which sequences every order
    first-come-first-served before it touches the book.
@@ -58,7 +60,7 @@ together and why the design is both fast and fair.
             commit + reveal              │ on-chain reads │
                      ▼                   │                │
             ┌────────────────────────────┴────────────────┴────┐
-            │      Fermi-v1 on-chain settlement program         │
+            │       Fermi-v1 on-chain exchange program          │
             │                                                   │
             │  Group · Bank · FermiAccount · PerpMarket         │
             │  BookSide · EventQueue · ExecutionQueueV5         │
@@ -75,10 +77,10 @@ A trade lives the following lifecycle:
    oracle freshness, health, and reduce-only rules off-chain.
 4. **Commit**: relayer batches up to 64 commits and writes them to
    the per-market `ExecutionQueueV5` ring.
-5. **Reveal & execute**: in a later transaction, the relayer
+5. **Reveal & execute**: in a later transaction, the executor
    reveals the payload; the program re-hashes it, verifies the user
-   signature, runs the order through the Fermi handler, and advances
-   the queue head.
+   signature, runs the order through the on-chain Fermi handler, and
+   advances the queue head.
 6. **Stream**: the executor emits a `FillLogV3` (or `OutEvent`); the
    fanout service propagates it over SSE.
 7. **Settle / fund**: PnL is settled by anyone calling
@@ -87,12 +89,14 @@ A trade lives the following lifecycle:
 
 ## What is *not* off-chain
 
-The matching engine, risk engine, liquidator, oracle, fee accrual,
-funding accrual, settlement, and bankruptcy resolution are all in
-the on-chain program. The relayer's job is **sequencing and pre-flight
-validation only**. If the relayer drops your intent, the chain state
-is unaffected; if the relayer reorders your intent, the commit hash
-mismatch is caught and the offending tx is rejected.
+Order placement, cancels, the matching engine, risk engine, liquidator,
+oracle checks, fee accrual, funding accrual, PnL settlement, and
+bankruptcy resolution are all in the on-chain program. The relayer's job
+is **sequencing and pre-flight validation only**. Continuum's optimistic
+view is **non-binding simulation only**. If the relayer drops your
+intent, the chain state is unaffected; if the relayer reorders your
+intent, the commit hash mismatch is caught and the offending tx is
+rejected.
 
 ## Properties at a glance
 

@@ -53,7 +53,8 @@ Optimistic data is useful for responsiveness. It can drive a UI, a quote
 manager, or an order monitor.
 
 Confirmed data is the reconciliation target. It is what accounting,
-balance displays, and risk dashboards should ultimately settle against.
+balance displays, and risk dashboards should ultimately use as the
+authoritative record.
 
 Good integrations expose this distinction instead of hiding it.
 

@@ -1,12 +1,14 @@
 # Fermi-v1 Documentation
 
 Fermi-v1 (`frmv1`) is a non-custodial, fully on-chain perpetual-futures
-exchange built on Solana. A single on-chain program owns the order
-book, the cross-margin risk engine, funding, and liquidation; a
-per-market commit/reveal execution queue sequences every order
-first-come-first-served; and an off-chain relayer plus optimistic
-"Continuum" harness give traders sub-second feedback while on-chain
-finality follows behind.
+exchange built on Solana. A single on-chain program owns order
+placement, cancels, matching, the order book, the cross-margin risk
+engine, funding, and liquidation; a per-market commit/reveal execution
+queue makes sequencing explicit before orders touch the book; and an
+off-chain relayer plus optimistic "Continuum" harness give traders
+sub-second feedback while on-chain finality follows behind. Off-chain
+simulation is non-binding: execution, matching, and book mutation happen
+on chain.
 
 This site is the user-facing reference for **traders, market makers,
 liquidators, integrators, and prospective partners or investors**

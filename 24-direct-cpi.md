@@ -1,6 +1,6 @@
 # 23 · Direct CPI Integration
 
-A Solana program can place, cancel, or settle orders on Fermi by
+A Solana program can place orders, cancel orders, or settle PnL on Fermi by
 **CPI'ing directly into the on-chain program** — without involving
 the relayer at all. This is the right pattern for:
 
@@ -17,8 +17,8 @@ the relayer at all. This is the right pattern for:
 | **`execution_queue_v5_enqueue_direct_market`** | For placing an order via the v5 queue. Includes Ed25519 preinstruction. |
 
 Most cross-program integrations need both: a direct enqueue for the
-place-order, and Anchor calls for the synchronous reads / cancels /
-settles.
+place-order path, and Anchor calls for synchronous reads, cancels, and
+PnL settlement.
 
 ## Prerequisites
 

@@ -2,9 +2,10 @@
 
 ### What is Fermi?
 
-A non-custodial, on-chain perpetual-futures exchange on Solana.
-Self-custody collateral, sign your own orders, settle every fill on
-chain. See [01 - Overview](01-overview.md).
+A non-custodial, fully on-chain perpetual-futures exchange on Solana.
+Self-custody collateral, sign your own orders, and have placement,
+cancels, matching, fills, margin, and liquidation execute on chain. See
+[01 - Overview](01-overview.md).
 
 ### How is Fermi different from a CEX perp?
 
@@ -228,5 +229,5 @@ Yes — the harness is open source and exposes the same HTTP/SSE
 surface as the hosted instance. Useful for low-latency strategies
 that don't want to depend on a public endpoint. Because the harness
 is purely a read/optimistic layer, running your own copy never
-affects settlement — the on-chain program remains the sole
+affects execution — the on-chain program remains the sole
 authority. See [02 - Architecture](02-architecture.md).
