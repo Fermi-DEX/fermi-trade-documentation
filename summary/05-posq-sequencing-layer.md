@@ -11,8 +11,8 @@ into the on-chain execution queue before the on-chain program matches,
 places, cancels, or rejects anything.
 
 The important distinction is that POSq is not a black-box sequencer.
-Sequencing is off chain, as it is in any blockchain system: without
-Continuum, ordering is still decided by Solana leaders, RPC routing,
+Sequencing is off chain, as it is in any blockchain system: without the
+optimistic harness, ordering is still decided by Solana leaders, RPC routing,
 priority fees, and transaction propagation. POSq makes that ordering
 explicit, encrypted before reveal, and auditable.
 
@@ -85,7 +85,7 @@ the intent into the matching engine, updates risk, and emits events.
 So the split is:
 
 - POSq: verifiable off-chain sequencing.
-- Continuum read layer: non-binding deterministic simulation and
+- Optimistic harness: non-binding deterministic simulation and
   streaming.
 - Fermi program: authoritative on-chain execution.
 

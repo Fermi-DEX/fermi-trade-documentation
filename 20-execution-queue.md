@@ -238,7 +238,7 @@ instructions are accepted on the live program.
 
 ## Tracing an intent
 
-Given `(market, sequence)` you can query the Continuum harness:
+Given `(market, sequence)` you can query the optimistic harness:
 
 ```
 GET /trace/sequence/{market}/{seq}

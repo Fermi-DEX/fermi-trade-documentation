@@ -133,7 +133,7 @@ against compounding a stale funding rate over a Solana downtime.
 
 ## Funding history endpoints
 
-The Continuum harness publishes a `PerpUpdateFundingLogV2` event on
+The optimistic harness publishes a `PerpUpdateFundingLogV2` event on
 every funding refresh:
 
 ```

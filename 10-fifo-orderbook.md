@@ -153,6 +153,6 @@ Because price-time priority is fully encoded in the keys, and keys
 are assigned at *commit* time using the per-market monotonic
 `seq_num`, two off-chain simulators that consume the same event
 stream will arrive at the same book layout. This is the basis of the
-Continuum harness's "optimistic view" — it can preplay an intent
+optimistic view maintained by the optimistic harness — it can preplay an intent
 against its mirror and produce the exact fills the on-chain matcher
 will produce, modulo oracle drift in the OraclePegged tree.

@@ -166,7 +166,7 @@ in one service for low latency.
 > (payload)** second. Locking before opening is what makes the
 > ordering provably fair — see "Why commit/reveal" below.
 
-### 4. The Continuum harness (optimistic read layer)
+### 4. The optimistic harness
 
 The harness is the component that makes Fermi-v1 *feel* fast. It is
 an off-chain service that maintains a continuously-updated mirror

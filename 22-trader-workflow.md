@@ -9,11 +9,11 @@ A working bot keeps:
 
 | State | Source | Refresh cadence |
 |---|---|---|
-| Group config (banks, perps, oracles) | Continuum `GET /config` | Once at startup; on a config-bump event |
-| Account state | Continuum `GET /state/users/:owner` or direct RPC | On every fill / cancel / settlement |
-| Orderbook | Continuum `GET /state/book/:market` + SSE deltas | Continuous via SSE |
-| Oracle prices | Continuum `GET /state/oracles` or direct RPC | Per-slot or on Pyth update |
-| Liquidation candidates (if you're a liqor) | Continuum `/state/users` index | Continuous polling |
+| Group config (banks, perps, oracles) | Optimistic harness `GET /config` | Once at startup; on a config-bump event |
+| Account state | Optimistic harness `GET /state/users/:owner` or direct RPC | On every fill / cancel / settlement |
+| Orderbook | Optimistic harness `GET /state/book/:market` + SSE deltas | Continuous via SSE |
+| Oracle prices | Optimistic harness `GET /state/oracles` or direct RPC | Per-slot or on Pyth update |
+| Liquidation candidates (if you're a liqor) | Optimistic harness `/state/users` index | Continuous polling |
 | Your unfilled intents | Local state | Locally; reconcile from harness `/trace` periodically |
 
 ## The order placement loop
@@ -58,11 +58,11 @@ const book     = await client.getOrderbook(perp);          // bids + asks merge
 const initHp   = await client.computeAccountHealth(group, fermiAccount, 'init');
 ```
 
-You can also point the SDK at the Continuum harness instead of
+You can also point the SDK at the optimistic harness instead of
 direct RPC reads — it's faster and gives you optimistic state.
 
 ```ts
-const harness = client.useContinuumHarness(HARNESS_URL);
+const harness = client.useOptimisticHarness(HARNESS_URL);
 const book    = await harness.getBook('SOL-PERP');
 const state   = await harness.getUserState(owner.publicKey);
 ```

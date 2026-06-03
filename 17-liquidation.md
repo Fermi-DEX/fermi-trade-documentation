@@ -145,7 +145,7 @@ liability.
    `perp_liq_negative_pnl_or_bankruptcy` to draw from insurance and
    close the account.
 
-The Continuum harness exposes a `/state/users/:owner` endpoint that
+The optimistic harness exposes a `/state/users/:owner` endpoint that
 reports `maint_health` and `liq_end_health` directly so a liquidator
 bot can sort candidates without having to recompute them locally.
 

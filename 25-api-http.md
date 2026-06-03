@@ -1,6 +1,6 @@
-# 24 · HTTP & SSE API (Continuum Harness + Fanout)
+# 24 · HTTP & SSE API (Optimistic Harness + Fanout)
 
-The Continuum harness is the read service for Fermi. It maintains a
+The optimistic harness is the read service for Fermi. It maintains a
 mirror of every PerpMarket, Bank, FermiAccount, and OrderBook in
 the group, applies relayer-accepted intents optimistically, and
 serves it over HTTP and Server-Sent Events (SSE).
@@ -14,7 +14,7 @@ process.
 | Service | Port | Purpose |
 |---|---|---|
 | Relayer | 9090 | gRPC `SubmitIntent`, `CancelIntent`, etc. |
-| Continuum harness | 9091 | HTTP REST + per-stream SSE |
+| Optimistic harness | 9091 | HTTP REST + per-stream SSE |
 | HTTP bridge | 9092 | Optional REST → gRPC adapter for the relayer |
 | Relayer metrics | 9093 | Prometheus `/metrics`, `/healthz` |
 | Fanout | 9094 | HTTP + SSE (auth-required, scaled re-broadcast) |

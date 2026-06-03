@@ -73,12 +73,12 @@ console.log(result.sequence, result.txSignature);
 | `perpSettleFees(group, perp, account)` | Settle accrued protocol fees. |
 | `perpDeactivatePosition(group, acct, perp)` | Free a perp slot. |
 | `computeAccountHealth(group, acct, kind)` | `init` / `maint`. |
-| `useContinuumHarness(url)` | Point reads at the harness. |
+| `useOptimisticHarness(url)` | Point reads at the harness. |
 
-### Continuum harness helpers
+### Optimistic harness helpers
 
 ```ts
-const harness = client.useContinuumHarness(HARNESS_URL);
+const harness = client.useOptimisticHarness(HARNESS_URL);
 
 await harness.getBook('SOL-PERP');
 await harness.getUserState(owner.publicKey);

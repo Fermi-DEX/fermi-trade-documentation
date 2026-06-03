@@ -21,7 +21,7 @@ This page walks you from a fresh wallet to your first filled perp.
 | Program ID | `FRMiKrj2hQGvcZQtSDdiFRZ4cmaTjuc1QVkM2B5ShUvA` |
 | Group | `87qUKYQoK1f9gYQjYzw5NcRo7wx6VmfhTGJ7JenoeYAA` |
 | Relayer (gRPC) | published in `ts/client/src/ids.json` and the SDK |
-| Continuum harness (HTTP/SSE) | published in `ts/client/src/ids.json` and the SDK |
+| Optimistic harness (HTTP/SSE) | published in `ts/client/src/ids.json` and the SDK |
 
 ### Devnet
 
@@ -97,7 +97,7 @@ follow your order:
   stream from the fanout service and watch for a `FillLogV3` whose
   `taker_client_order_id == 1`.
 - **Trace endpoint:** `GET /trace/sequence/{market}/{seq}` on the
-  Continuum harness reports every stage your intent has hit
+  optimistic harness reports every stage your intent has hit
   (accepted → committed → submitted → revealed → executed).
 
 ## 6. Settle PnL

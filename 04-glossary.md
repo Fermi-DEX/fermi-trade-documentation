@@ -36,9 +36,9 @@ Every term used elsewhere in these docs.
   Locks in the sequence; the payload comes later in the reveal.
 - **CommitItemV5** — The 96-byte ring-buffer entry storing one
   committed intent: hash, sequence, ingress slot, expiry, status, retries.
-- **Confirmed view** — Continuum harness state derived only from
+- **Confirmed view** — Optimistic harness state derived only from
   on-chain confirmed transactions. Safe to reconcile against.
-- **Continuum harness** — Off-chain read / optimistic layer that
+- **Optimistic harness** — Off-chain read / optimistic layer that
   publishes optimistic and confirmed views of the orderbook +
   accounts. Has no authority over execution. See
   [02 - Architecture](02-architecture.md).
@@ -155,7 +155,7 @@ Every term used elsewhere in these docs.
 ### O
 - **Open interest** — Sum of absolute base lots across all longs
   (= sum of absolute base lots across all shorts).
-- **Optimistic view** — Continuum harness state = confirmed view +
+- **Optimistic view** — Optimistic harness state = confirmed view +
   relayer-accepted intents not yet finalized on chain. Predicts the
   on-chain outcome in milliseconds; safe because the matcher is
   deterministic. Contrast **Confirmed view**.
@@ -229,7 +229,7 @@ Every term used elsewhere in these docs.
 - **TIF** — Time-in-force, in seconds from placement; `0` = no
   expiry. Expired orders are removed by the next matcher or
   `perp_consume_events`.
-- **Trace** — Continuum harness endpoint
+- **Trace** — Optimistic harness endpoint
   `/trace/sequence/{market}/{seq}` that lists every stage an intent
   passed through (and which it didn't).
 

@@ -21,7 +21,7 @@ chain. See [01 - Overview](01-overview.md).
   `FermiAccount`.
 - A per-market commit/reveal queue (v5) gives explicit FIFO
   guarantees and replay protection.
-- Optimistic + confirmed dual-view state via the Continuum harness.
+- Optimistic + confirmed dual-view state via the optimistic harness.
 
 ## Trading
 
@@ -208,7 +208,7 @@ downtime.
 ### Where is the source code?
 
 The on-chain program lives at `programs/fermi-v1/` in the Fermi
-repo. The relayer and executor live in `bin/`, and the Continuum
+repo. The relayer and executor live in `bin/`, and the optimistic
 harness in `rust-harness/`. All components are open source so
 anyone can audit the matching engine, risk engine, and queue logic.
 

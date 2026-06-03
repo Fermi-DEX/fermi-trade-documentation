@@ -30,7 +30,7 @@ is architected so you don't have to choose.
    ┌───────────────┐      ┌──────────────────┐
    │ POSq           │      │ Optimistic read  │
    │ sequencing     │      │ layer            │
-   │ layer          │      │ (Continuum)      │
+   │ layer          │      │ harness          │
    └──────┬─────────┘      └────────▲─────────┘
           │ ordered intents          │ on-chain reads
           ▼                          │
@@ -79,8 +79,8 @@ The POSq layer is documented in detail on its own page —
 
 ### The optimistic read layer
 
-The optimistic read layer (the "Continuum" harness) is what makes
-Fermi *feel* fast. It maintains a continuously-updated mirror of all
+The optimistic harness is what makes Fermi *feel* fast. It maintains a
+continuously-updated mirror of all
 on-chain state and serves it over HTTP and streaming. It publishes two
 views:
 

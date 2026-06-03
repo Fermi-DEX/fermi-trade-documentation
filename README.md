@@ -4,8 +4,8 @@ Fermi-v1 (`frmv1`) is a non-custodial, fully on-chain perpetual-futures
 exchange built on Solana. A single on-chain program owns the order
 book, the cross-margin risk engine, funding, and liquidation; POSq
 sequences encrypted intents over VDF ticks and anchors that order into a
-per-market commit/reveal execution queue; and an optimistic "Continuum"
-harness gives traders millisecond-level feedback while on-chain finality
+per-market commit/reveal execution queue; and an optimistic harness
+gives traders millisecond-level feedback while on-chain finality
 follows behind.
 
 This site is the user-facing reference for **traders, market makers,
@@ -76,7 +76,7 @@ evaluating the system. It explains both *how Fermi-v1 works* and
 - **[23 - SDK](23-sdk.md)** — TypeScript and Rust clients.
 - **[24 - Direct CPI Integration](24-direct-cpi.md)** — Submit orders
   from another Solana program.
-- **[25 - HTTP & SSE API](25-api-http.md)** — Continuum harness REST,
+- **[25 - HTTP & SSE API](25-api-http.md)** — Optimistic harness REST,
   fanout SSE.
 - **[26 - gRPC API (Relayer)](26-api-grpc.md)** — `SubmitIntent`,
   signing, error codes.

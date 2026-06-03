@@ -20,7 +20,7 @@ Fermi-v1 is built around four cleanly separated components:
 3. A **per-market commit/reveal execution queue** (the v5 queue) built
    into that program, which anchors the POSq order on chain before
    intents touch the book.
-4. The **Continuum harness** — an off-chain read layer that
+4. The **optimistic harness** — an off-chain read layer that
    publishes optimistic and confirmed state to traders over
    HTTP / SSE, so they see their orders reflected in milliseconds
    while on-chain finality follows behind.
@@ -44,7 +44,7 @@ together and why the design is both fast and fair.
 - **Censorship fallback.** A direct-submission pool lets users get
   orders into the queue even if the v1 fast path is offline or refusing
   admission.
-- **Public, low-latency reads.** The Continuum harness exposes
+- **Public, low-latency reads.** The optimistic harness exposes
   optimistic order-book and account state over SSE; the fanout service
   scales it horizontally.
 
@@ -57,7 +57,7 @@ together and why the design is both fast and fair.
        sign+submit   │  read state         │  read events│
                      ▼                     ▼             ▼
             ┌────────────────┐  ┌─────────────────┐ ┌──────────┐
-            │   Relayer      │  │   Continuum     │ │ Fanout   │
+            │   Relayer      │  │  Optimistic     │ │ Fanout   │
             │   (gRPC :9090) │  │   harness       │ │ (SSE)    │
             │                │  │  (HTTP/SSE)     │ │          │
             └────────┬───────┘  └────────┬────────┘ └─────┬────┘
