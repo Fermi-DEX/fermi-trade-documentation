@@ -17,7 +17,7 @@ The optimistic read layer maintains a live mirror of all on-chain
 state and publishes two views:
 
 - **Confirmed view.** Built only from finalized on-chain transactions.
-  This is ground truth — what you reconcile and settle against.
+  This is ground truth — what you reconcile against.
 - **Optimistic view.** The confirmed view *plus* the orders that have
   already been sequenced but not yet finalized.
 
@@ -30,9 +30,9 @@ fills 1.4 SOL at $150.2."*
 A pre-confirmation is not a guess. The matching logic is
 **deterministic**, and the read layer runs the same logic against its
 mirror of the book that the chain will run when the order executes.
-Because the order's place in line is already locked
-([FCFS Ordering](06-fcfs-ordering.md)), the prediction and the
-on-chain result agree.
+Because the order's place in line is already locked by the POSq
+sequence and on-chain queue ([FCFS Ordering](06-fcfs-ordering.md)), the
+prediction and the on-chain result agree.
 
 The one source of drift is genuinely external: oracle-pegged orders
 re-price as the oracle moves, so a prediction made against one oracle

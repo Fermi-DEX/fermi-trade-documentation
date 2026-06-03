@@ -1,20 +1,25 @@
 # 01 · Overview
 
-Fermi-v1 is a **non-custodial, on-chain perpetual-futures exchange** on
-Solana. Traders self-custody collateral, sign their own orders, and
-settle every fill on a public ledger. There is no off-chain matching
-engine, no off-chain risk database, no escrow account.
+Fermi-v1 is a **non-custodial, fully on-chain perpetual-futures exchange**
+on Solana. Traders self-custody collateral and sign their own orders;
+order placement, cancels, matching, fills, risk checks, funding, and
+liquidation all execute through the deployed program. There is no
+off-chain matching engine, no off-chain risk database, no escrow account.
 
 Fermi-v1 is built around four cleanly separated components:
 
-1. The **on-chain settlement program** — a Solana program that owns
-   the order book, the matching engine, the risk engine, funding,
-   and liquidation. It is the single source of truth.
-2. A **per-market commit/reveal execution queue** (the v5 queue)
-   built into that program, which sequences every order
-   first-come-first-served before it touches the book.
-3. The **relayer** — an off-chain sequencer that accepts signed
-   orders, validates them, and commits them to the queue.
+1. The **on-chain exchange program** — a Solana program that owns order
+   placement, cancels, the order book, the matching engine, the risk
+   engine, funding, and liquidation. It is the single source of truth
+   for execution.
+2. The **POSq sequencing layer**, which orders encrypted transactions
+   over VDF ticks before they are revealed. In v1 POSq runs in
+   single-sequencer mode, making reordering detectable rather than
+   hidden in a black-box sequencer. V2 is planned to add voting, leader
+   rotation, and permissionless participation.
+3. A **per-market commit/reveal execution queue** (the v5 queue) built
+   into that program, which anchors the POSq order on chain before
+   intents touch the book.
 4. The **Continuum harness** — an off-chain read layer that
    publishes optimistic and confirmed state to traders over
    HTTP / SSE, so they see their orders reflected in milliseconds
@@ -30,13 +35,15 @@ together and why the design is both fast and fair.
   single signed-USD number.
 - **FIFO orderbook.** Two trees per side — fixed price and oracle-
   pegged — both ordered strictly by price-time.
-- **Verifiable order sequencing.** Every order is hash-committed on
-  chain *before* it executes. Validators cannot reorder same-market
-  orders without breaking the commit hash.
+- **Verifiable order sequencing.** POSq sequences encrypted intents over
+  VDF ticks, then every order is hash-committed on chain *before* it
+  executes. Reordering relative to the emitted POSq sequence is
+  detectable.
 - **Replay protection.** A 10-slot, 512-entry intent-hash cache makes
   signature replay impossible.
 - **Censorship fallback.** A direct-submission pool lets users get
-  orders into the queue even if the relayer is offline or hostile.
+  orders into the queue even if the v1 fast path is offline or refusing
+  admission.
 - **Public, low-latency reads.** The Continuum harness exposes
   optimistic order-book and account state over SSE; the fanout service
   scales it horizontally.
@@ -58,7 +65,7 @@ together and why the design is both fast and fair.
             commit + reveal              │ on-chain reads │
                      ▼                   │                │
             ┌────────────────────────────┴────────────────┴────┐
-            │      Fermi-v1 on-chain settlement program         │
+            │       Fermi-v1 on-chain exchange program          │
             │                                                   │
             │  Group · Bank · FermiAccount · PerpMarket         │
             │  BookSide · EventQueue · ExecutionQueueV5         │
@@ -70,15 +77,17 @@ A trade lives the following lifecycle:
 
 1. **Sign**: SDK builds a v5-canonical intent payload and the user
    signs it (wallet pop-up or programmatic Ed25519 signature).
-2. **Submit**: SDK sends the intent to the relayer over gRPC.
-3. **Pre-validate**: relayer checks signature, account staleness,
+2. **Submit**: SDK sends the encrypted intent to the POSq/relayer fast
+   path over gRPC.
+3. **Pre-validate**: fast-path services check signature, account staleness,
    oracle freshness, health, and reduce-only rules off-chain.
-4. **Commit**: relayer batches up to 64 commits and writes them to
-   the per-market `ExecutionQueueV5` ring.
-5. **Reveal & execute**: in a later transaction, the relayer
+4. **Sequence & commit**: POSq assigns the intent to a VDF tick/order;
+   the relayer batches up to 64 commits and writes them to the per-market
+   `ExecutionQueueV5` ring.
+5. **Reveal & execute**: in a later transaction, the executor
    reveals the payload; the program re-hashes it, verifies the user
-   signature, runs the order through the Fermi handler, and advances
-   the queue head.
+   signature, runs the order through the on-chain Fermi handler, and
+   advances the queue head.
 6. **Stream**: the executor emits a `FillLogV3` (or `OutEvent`); the
    fanout service propagates it over SSE.
 7. **Settle / fund**: PnL is settled by anyone calling
@@ -89,17 +98,18 @@ A trade lives the following lifecycle:
 
 The matching engine, risk engine, liquidator, oracle, fee accrual,
 funding accrual, settlement, and bankruptcy resolution are all in
-the on-chain program. The relayer's job is **sequencing and pre-flight
-validation only**. If the relayer drops your intent, the chain state
-is unaffected; if the relayer reorders your intent, the commit hash
-mismatch is caught and the offending tx is rejected.
+the on-chain program. POSq/relayer services provide **verifiable
+sequencing, submission, and pre-flight validation only**. If the v1 fast
+path refuses an intent before admission, the chain state is unaffected
+and the direct path remains available; if it reorders relative to the
+emitted POSq sequence, the VDF-tick/commit trail makes that detectable.
 
 ## Properties at a glance
 
 | Property | Mechanism |
 |---|---|
 | Self-custody | Fermi account is a PDA you own; only your signature can mutate it. |
-| Verifiable ordering | Per-market sequence + hash commit prior to reveal. |
+| Verifiable ordering | POSq encrypted VDF ticks + per-market sequence + hash commit prior to reveal. |
 | Replay-proof | On-chain `replay_cache` of consumed intent hashes (10 slots / 512 entries). |
 | FIFO matching | Composite `(price, !seq)` keys for bids and `(price, seq)` for asks. |
 | Censorship fallback | Direct-submit pool with a fixed slot speed-bump. |

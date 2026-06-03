@@ -44,13 +44,16 @@ the liquidation trigger, and liquidation-end is the recovery target.
 **FCFS** — First-come-first-served. The ordering policy Fermi uses:
 earlier orders execute first, and nobody can jump the line.
 
-**POSq sequencing layer** — The layer that assigns every order its
-place in line and is responsible for fair ordering and censorship
-resistance. See [POSq Sequencing Layer](05-posq-sequencing-layer.md).
+**POSq sequencing layer** — Fermi's verifiable sequencing layer. In v1,
+it runs in single-sequencer mode, ordering encrypted transactions over
+VDF ticks so reordering is detectable. V2 is planned to add voting,
+leader rotation, and permissionless participation. See
+[POSq Sequencing Layer](05-posq-sequencing-layer.md).
 
 **Commit / reveal** — The two-step protocol that locks an order's
 sequence and a hash of its contents on chain *before* the contents
-are revealed and executed. This is what makes ordering provably fair.
+are revealed and executed. Together with POSq's encrypted VDF-tick
+sequence, this is what makes ordering auditable.
 
 **Pre-confirmation** — The optimistic, sub-second prediction of your
 fill, shown before the transaction reaches on-chain finality.

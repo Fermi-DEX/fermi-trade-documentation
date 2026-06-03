@@ -17,7 +17,7 @@ reference. They are intended to drop into a Mintlify-style docs site.
 
 **Design**
 4. `04-architecture.md` — How Fermi is built and why it is both fair and fast
-5. `05-posq-sequencing-layer.md` — The POSq sequencing layer *(placeholder — coming soon)*
+5. `05-posq-sequencing-layer.md` — The POSq sequencing layer
 6. `06-fcfs-ordering.md` — First-come-first-served ordering
 7. `07-fast-pre-confirmations.md` — Millisecond pre-confirmations
 8. `08-amqs.md` — *(placeholder — see note below)*
@@ -55,13 +55,11 @@ reference. They are intended to drop into a Mintlify-style docs site.
 
 ## Two notes for the editor (not for publication)
 
-- **POSq sequencing layer.** Per direction, ordering and
-  censorship-resistance claims throughout these pages are attributed
-  to the **POSq sequencing layer**, not to a single trusted relayer.
-  The dedicated page (`05`) is intentionally left blank ("coming
-  soon"). The underlying relayer/executor mechanics are still
-  described where useful, but framed as plumbing beneath POSq rather
-  than as a party you must trust for fairness.
+- **POSq sequencing layer.** Ordering and censorship-resistance claims
+  should be precise: v1 uses single-sequencer POSq over encrypted VDF
+  ticks, making reordering detectable rather than hidden in a black-box
+  sequencer. V2 adds voting, leader rotation, and permissionless
+  participation to address remaining inclusion/liveness gaps.
 - **AMQs.** "AMQs" was requested as one of the opinionated design
   pillars, but the term does not appear in the supplied technical
   documentation, so `08-amqs.md` is a flagged placeholder. Please

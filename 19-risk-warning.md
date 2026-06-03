@@ -89,8 +89,10 @@ intent (with new nonce / `client_order_id`) for each retry.
 
 ## What the protocol **does** protect you from
 
-- A malicious relayer can't reorder your transactions without
-  detection — the commit hash mismatch is caught on chain.
+- A malicious v1 sequencer/relayer can't silently reorder your
+  transactions relative to the emitted POSq order — encrypted VDF ticks,
+  the commitment trail, and on-chain queue commits make reordering
+  detectable.
 - A malicious relayer can't substitute account lists — the canonical
   user-intent message (`canonical_user_intent_message_v2`,
   `instructions/execution_queue_v5.rs:671-682`) binds the account
@@ -109,8 +111,9 @@ If you find yourself unable to act on the system:
 
 1. **Check the trace endpoint.** `/trace/sequence/{market}/{seq}`
    reports every stage of an intent (or absence of it). Most "lost
-   orders" turn out to be intents that never reached the relayer.
-2. **Use direct submission.** Bypasses the relayer entirely for
+   orders" turn out to be intents that never reached the POSq/relayer
+   fast path.
+2. **Use direct submission.** Bypasses the fast path entirely for
    cancellation / close-only flows.
 3. **Use the Anchor IDL directly.** All `perp_cancel_*`,
    `token_withdraw`, etc. are direct on-chain instructions you can

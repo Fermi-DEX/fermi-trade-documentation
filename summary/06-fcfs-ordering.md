@@ -6,15 +6,16 @@ description: How Fermi makes fair ordering a verifiable property, not a promise
 # First-Come-First-Served Ordering
 
 Fermi's defining property is **first-come-first-served (FCFS)
-ordering**: earlier orders execute before later ones, and nobody — not
-an operator, not a validator, not another trader — can jump the line
-or front-run pending flow.
+ordering**: earlier sequenced orders execute before later sequenced
+orders. POSq makes the sequence auditable rather than a private operator
+claim.
 
 The order in which trades happen is decided by the
-[POSq sequencing layer](05-posq-sequencing-layer.md). What this page
-explains is how that order is *enforced and verified on chain*, so
-that FCFS is something you can check rather than something you have to
-trust.
+[POSq sequencing layer](05-posq-sequencing-layer.md), which in v1
+sequences encrypted transactions over VDF ticks in single-sequencer
+mode. What this page explains is how that order is *enforced and
+verified on chain*, so FCFS is something you can check rather than
+something you have to trust blindly.
 
 ## One sequence per market
 
@@ -41,10 +42,10 @@ The key mechanism is a two-step **commit / reveal** protocol:
 Locking the position before revealing the contents is what makes
 ordering provably fair. It produces four guarantees:
 
-- **FCFS is enforced, not trusted.** The sequence is chosen at commit
-  time and is immediately public and immutable. There is no window in
-  which a privileged actor can insert an order ahead of yours after
-  seeing it.
+- **FCFS is enforced against the emitted sequence.** POSq creates an
+  auditable VDF-tick order, and the on-chain queue executes that order.
+  There is no window in which a privileged actor can insert an order
+  ahead of yours after seeing the revealed payload.
 - **No payload-based reordering.** Until your order is already locked
   into its place, nobody can see what it contains — so ordering cannot
   be influenced by order contents. This neutralizes the most common
@@ -64,16 +65,16 @@ ordering provably fair. It produces four guarantees:
 | Reordering a block for profit | Same-market order is fixed on chain before reveal; a reorder breaks the commit hash. |
 | Editing an order after submission | Reveal re-hashes the payload; any edit is rejected. |
 | Replaying a captured order | The consumed-order cache rejects duplicates. |
-| Silently dropping an order | Every stage emits a queryable event; you can trace exactly where an order is. |
+| Silently rewriting the emitted order | The POSq tick log, queue commit, and reveal trail make the mismatch detectable. |
+| Pre-admission censorship | In v1 this is mitigated by direct on-chain submission; v2 adds voting, leader rotation, and permissionless participation. |
 
 ## Verifiability and tracing
 
-Time priority on Fermi is a property of the protocol, the same way it
-is inside a professional matching engine — except here it is publicly
-verifiable and nobody has to be trusted to honor it. Every stage of an
-order's life emits a structured event, so given a market and a
-sequence number you can ask exactly where an order is and why:
-accepted, locked, revealed, executed, or skipped, with the reason.
+Time priority on Fermi is a property of the POSq sequence plus the
+on-chain queue, not a black-box matching server. Every stage of an
+order's life emits a structured event, so given a market and a sequence
+number you can ask exactly where an order is and why: accepted, locked,
+revealed, executed, or skipped, with the reason.
 
 If an order is ever lost in transit (for example, an RPC failure drops
 it), the queue does not wedge: after a short, bounded wait it can

@@ -6,15 +6,17 @@ description: The permissionless path that backstops inclusion
 # Direct On-Chain Submission
 
 The fast path on Fermi runs through the
-[POSq sequencing layer](05-posq-sequencing-layer.md), which is
-responsible for fair ordering and for getting your orders included.
-As an additional backstop, Fermi also exposes a **permissionless
-on-chain submission path**: any signer can push an order straight into
-a market's queue on chain, without depending on the fast path at all.
+[POSq sequencing layer](05-posq-sequencing-layer.md). In v1, POSq uses a
+single sequencer that orders encrypted transactions over VDF ticks. That
+makes reordering detectable, but it does not eliminate every
+availability or pre-admission censorship risk. As a backstop, Fermi also
+exposes a **permissionless on-chain submission path**: any signer can
+push an order straight into a market's queue on chain, without depending
+on the fast path at all.
 
-This is the floor under the system's censorship resistance — it
-guarantees that, as long as you can land a Solana transaction, you can
-always reach the exchange.
+This is the floor under the system's censorship resistance in v1: as
+long as you can land a Solana transaction, you can always reach the
+exchange even if the fast path is unavailable or refusing admission.
 
 ## When to use it
 
@@ -54,7 +56,7 @@ The direct path is a different *route in*, not a way around the rules:
   submitted order to increase exposure still fails.
 - **It does not bypass replay protection.** A given signed order can
   still only be consumed once; retries need a fresh order.
-- **It does not change settlement.** Everything settles through the
+- **It does not change execution.** Everything executes through the
   same on-chain program, with the same guarantees.
 
 ## Recommended use: cancel under stress

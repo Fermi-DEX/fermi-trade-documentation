@@ -55,7 +55,8 @@ exchange's solvency. See [Liquidations](22-liquidations.md) and
 ## How fills happen
 
 Orders are sequenced first-come-first-served by the
-[POSq sequencing layer](05-posq-sequencing-layer.md), locked on chain,
+[POSq sequencing layer](05-posq-sequencing-layer.md), which in v1 orders
+encrypted intents over VDF ticks. The resulting position is locked on chain,
 then matched against the [order book](15-order-book.md) by a
 deterministic [matching engine](16-matching-engine.md). You see a
 [pre-confirmation](07-fast-pre-confirmations.md) of your fill in

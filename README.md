@@ -2,11 +2,11 @@
 
 Fermi-v1 (`frmv1`) is a non-custodial, fully on-chain perpetual-futures
 exchange built on Solana. A single on-chain program owns the order
-book, the cross-margin risk engine, funding, and liquidation; a
-per-market commit/reveal execution queue sequences every order
-first-come-first-served; and an off-chain relayer plus optimistic
-"Continuum" harness give traders millisecond-level feedback while on-chain
-finality follows behind.
+book, the cross-margin risk engine, funding, and liquidation; POSq
+sequences encrypted intents over VDF ticks and anchors that order into a
+per-market commit/reveal execution queue; and an optimistic "Continuum"
+harness gives traders millisecond-level feedback while on-chain finality
+follows behind.
 
 This site is the user-facing reference for **traders, market makers,
 liquidators, integrators, and prospective partners**
@@ -19,9 +19,9 @@ evaluating the system. It explains both *how Fermi-v1 works* and
 - **[01 - Overview](01-overview.md)** — What Fermi-v1 is, what makes
   it different, and the moving pieces.
 - **[02 - Architecture](02-architecture.md)** — The on-chain program,
-  relayer, executor, and optimistic harness; how they interact; why
-  the design is fair (FCFS) and fast (low optimistic latency); the
-  trust model and viability case.
+  POSq sequencing layer, relayer/executor plumbing, and optimistic
+  harness; how they interact; why the design is fair (auditable FCFS)
+  and fast (low optimistic latency); the trust model and viability case.
 - **[03 - Getting Started](03-getting-started.md)** — Connect a wallet,
   fund an account, place your first order.
 - **[04 - Glossary](04-glossary.md)** — Every term used in these docs.

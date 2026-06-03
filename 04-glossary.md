@@ -37,14 +37,14 @@ Every term used elsewhere in these docs.
 - **CommitItemV5** — The 96-byte ring-buffer entry storing one
   committed intent: hash, sequence, ingress slot, expiry, status, retries.
 - **Confirmed view** — Continuum harness state derived only from
-  on-chain confirmed transactions. Safe to settle on.
+  on-chain confirmed transactions. Safe to reconcile against.
 - **Continuum harness** — Off-chain read / optimistic layer that
   publishes optimistic and confirmed views of the orderbook +
-  accounts. Has no authority over settlement. See
+  accounts. Has no authority over execution. See
   [02 - Architecture](02-architecture.md).
-- **CTM** — Cooperative Transaction Model. The relayer is the
-  "trusted-but-verifiable" sequencer; users sign intents, relayer
-  assigns sequence and commits.
+- **CTM** — Cooperative Transaction Model. Users sign intents; POSq
+  sequences encrypted intents over VDF ticks; the relayer commits the
+  resulting sequence to the on-chain queue.
 
 ### D
 - **DecrementTake** — Self-trade behavior: matching against your own
@@ -189,11 +189,14 @@ Every term used elsewhere in these docs.
 ### R
 - **Reduce-only** — Order flag (or market mode) that disallows any
   trade that would *increase* absolute exposure.
-- **Relayer** — Off-chain gRPC sequencer that accepts user intents,
-  validates them, assigns per-market sequences, and commits intent
-  hashes to the on-chain v5 queue. Trusted-but-verifiable: it
-  chooses commit order but cannot alter, reorder-after-commit,
-  replay, or forge orders. See [02 - Architecture](02-architecture.md).
+- **POSq** — Fermi's verifiable sequencing scheme. In v1 it runs in
+  single-sequencer mode, ordering encrypted transactions over VDF
+  ticks so reordering is detectable. V2 is planned to add voting,
+  leader rotation, and permissionless participation.
+- **Relayer** — Off-chain gRPC service that accepts user intents,
+  validates them, and commits POSq-ordered intent hashes to the
+  on-chain v5 queue. It cannot alter, silently reorder an emitted POSq
+  sequence, replay, or forge orders. See [02 - Architecture](02-architecture.md).
 - **Replay cache** — On-chain ring of consumed `(intent_hash,
   consumed_slot)` pairs; rejects duplicate submissions for ~10 slots
   / 512 entries.

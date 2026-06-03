@@ -3,7 +3,7 @@
 ### What is Fermi?
 
 A non-custodial, on-chain perpetual-futures exchange on Solana.
-Self-custody collateral, sign your own orders, settle every fill on
+Self-custody collateral, sign your own orders, execute every fill on
 chain. See [01 - Overview](01-overview.md).
 
 ### How is Fermi different from a CEX perp?
@@ -142,19 +142,23 @@ So **~1-2 seconds** end-to-end is normal, faster on optimistic
 view (the harness shows your intent applied as soon as the
 relayer accepts it).
 
-### Can the relayer reorder my orders?
+### Can POSq / the relayer reorder my orders?
 
-Within a market — no, not without detection. The commit hash binds
-the sequence and payload; any reorder breaks the hash and the tx
-fails on chain. Across markets — yes, since each market has its own
-queue, the relayer can choose which market to commit first.
+Within a market — not silently. In v1, POSq runs in single-sequencer
+mode and orders encrypted transactions over VDF ticks. The emitted POSq
+order, queue commit, and reveal trail make reordering detectable, and
+the on-chain queue enforces the committed sequence. Across markets, each
+market has its own queue, so ordering is only defined per market.
 
-### Can the relayer drop my order?
+### Can POSq / the relayer drop my order?
 
-It can refuse to admit it (returns an error). It cannot make a
-silently-accepted order disappear without an audit trail — every
-stage emits a structured event you can query via the
-`/trace/sequence/{market}/{seq}` endpoint.
+In v1, the single fast-path sequencer can refuse admission or be
+unavailable before your intent enters the POSq log. Once accepted and
+committed, it cannot make a silently accepted order disappear without an
+audit trail — every stage emits a structured event you can query via the
+`/trace/sequence/{market}/{seq}` endpoint. V2 is planned to add voting,
+leader rotation, and permissionless participation to reduce the remaining
+single-sequencer liveness/admission assumption.
 
 ### What is "autodrop"?
 
@@ -215,12 +219,12 @@ private disclosure channel rather than a public GitHub issue.
 
 ### Can I run my own relayer?
 
-Yes — the relayer/executor binary is open source and is the same
-code the operator runs. You'll need a funded Solana keypair to
-commit on chain and a Pyth-friendly RPC. Running your own relayer
-does not give you any privileged position: the on-chain queue
-enforces first-come-first-served ordering regardless of which
-relayer commits an order.
+Yes — the relayer/executor binary is open source and is the same code
+the operator runs. You'll need a funded Solana keypair to commit on
+chain and a Pyth-friendly RPC. In v1, POSq production sequencing is
+single-sequencer mode, so running your own relayer does not by itself
+make you the sequencer. V2 is planned to add leader rotation and
+permissionless participation.
 
 ### Can I run my own harness instance?
 
@@ -228,5 +232,5 @@ Yes — the harness is open source and exposes the same HTTP/SSE
 surface as the hosted instance. Useful for low-latency strategies
 that don't want to depend on a public endpoint. Because the harness
 is purely a read/optimistic layer, running your own copy never
-affects settlement — the on-chain program remains the sole
+affects execution — the on-chain program remains the sole
 authority. See [02 - Architecture](02-architecture.md).

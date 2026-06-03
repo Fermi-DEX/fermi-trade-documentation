@@ -30,10 +30,10 @@ moves past a bound (and resume when it comes back).
 For asks, the cheapest offer is matched first; for bids, the highest
 bid is matched first. When two orders sit at the same price, the one
 that arrived earlier is filled first. This is the same fairness model a
-professional venue uses — and on Fermi the time priority is anchored
-to the on-chain sequence assigned by the
-[POSq sequencing layer](05-posq-sequencing-layer.md), so it is
-verifiable rather than operator-controlled.
+professional venue uses — and on Fermi the time priority is anchored to
+the POSq sequence and on-chain queue. In v1, POSq orders encrypted
+transactions over VDF ticks, so reordering is detectable rather than
+operator-hidden.
 
 ## Order identity and cancellation
 

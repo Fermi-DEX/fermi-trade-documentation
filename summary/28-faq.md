@@ -14,10 +14,10 @@ move. No operator or off-chain service can touch your funds.
 ## Who decides the order my trades execute in?
 
 The [POSq sequencing layer](05-posq-sequencing-layer.md) assigns every
-order its place in line, first-come-first-served. That place is locked
-on chain before anyone can see your order's contents, so the ordering
-is verifiable rather than something you have to trust. See
-[FCFS Ordering](06-fcfs-ordering.md).
+order its place in line. In v1, POSq runs in single-sequencer mode,
+ordering encrypted transactions over VDF ticks, so reordering is
+detectable rather than hidden in a black-box sequencer. That place is
+then locked on chain before execution. See [FCFS Ordering](06-fcfs-ordering.md).
 
 ## How can it feel fast if it's fully on-chain?
 
@@ -29,10 +29,11 @@ because the same deterministic matching logic runs in both places. See
 
 ## What can the off-chain services do to me?
 
-Nothing that costs you. They can't move funds, change a fill, reorder
-locked orders, edit your order, or replay it. The worst case is
-degraded latency — and even then you can submit on chain directly. See
-[Architecture](04-architecture.md) and
+Nothing that costs you directly. They can't move funds, change a fill,
+silently rewrite an emitted POSq order, edit your order, or replay it.
+In v1, the fast path can still be unavailable or refuse admission before
+your intent enters the POSq log. The fallback is direct on-chain
+submission. See [Architecture](04-architecture.md) and
 [Direct On-Chain Submission](25-direct-onchain-submission.md).
 
 ## What collateral can I use?

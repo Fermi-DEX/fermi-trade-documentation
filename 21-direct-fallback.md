@@ -1,9 +1,10 @@
 # 20 · Direct Fallback Pool
 
-The relayer is the fast path on Fermi — but if you can't reach it
-(it's down, it's censoring you, or you simply don't trust it) there
-is a permissionless on-chain alternative: the **direct submission
-pool**.
+POSq/relayer is the fast path on Fermi. In v1 it runs with a single
+sequencer that orders encrypted transactions over VDF ticks, making
+reordering detectable. If you can't reach that fast path, or if it
+refuses admission before your intent enters the POSq log, there is a
+permissionless on-chain alternative: the **direct submission pool**.
 
 ## What it is
 
@@ -17,10 +18,11 @@ from then on it follows the standard reveal/execute path.
 
 ## When to use it
 
-- **Relayer outage.** You need to cancel an order or close a
-  position and the relayer is unreachable.
-- **Censorship concern.** A relayer that refuses to admit your
-  intent (whether by accident or design) can be bypassed.
+- **Fast-path outage.** You need to cancel an order or close a
+  position and POSq/relayer is unreachable.
+- **Pre-admission censorship concern.** A v1 sequencer/relayer that
+  refuses to admit your intent (whether by accident or design) can be
+  bypassed.
 - **Programmatic on-chain integrations.** Another Solana program
   wants to invoke a Fermi order via CPI without involving any off-
   chain service. See [24 - Direct CPI](24-direct-cpi.md).

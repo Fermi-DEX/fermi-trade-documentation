@@ -74,7 +74,7 @@ Fermi account snapshot. Optional `?view=optimistic|confirmed`
 selects the source:
 
 - `confirmed` — latest committed on-chain state. Safe for
-  settlement decisions.
+  execution and risk decisions.
 - `optimistic` — confirmed + relayer-accepted-not-yet-on-chain
   intents applied. Useful for UIs and bot decision loops.
 

@@ -1,14 +1,14 @@
 # 19 · Execution Queue v5
 
 The execution queue (the "v5 queue") is the on-chain state machine
-that orders pending intents before they touch the order book. Every
-order placed via the relayer goes through it.
+that enforces the POSq-produced order before intents touch the order
+book. Every order placed via the fast path goes through it.
 
 Goals it solves:
 
 1. **Verifiable ordering.** Same-market intents execute in the exact
-   order they were committed; a validator that tries to reorder
-   breaks the commit hash and the tx fails.
+   order committed from the POSq sequence; a validator that tries to
+   reorder breaks the commit hash and the tx fails.
 2. **Account-substitution resistance.** The account list is part of
    the user-signed intent; a relayer that swaps accounts after
    signing is detected at reveal.
@@ -87,9 +87,9 @@ window is detected.
 ```
 USER SIGNS INTENT
   ↓
-[off-chain]  relayer validates: signature, accounts, health
+[off-chain]  POSq/relayer validates: signature, accounts, health
   ↓
-COMMIT      relayer writes CommitItemV5 with status=Committed
+COMMIT      relayer writes POSq-ordered CommitItemV5 with status=Committed
              into ring[sequence % 1024]; entry visible on chain.
   ↓
 REVEAL +    executor submits full payload; on-chain program:
@@ -109,8 +109,8 @@ EXECUTE      ├─ recomputes payload hash, compares to commit_hash
 
 ## Sequence assignment
 
-Sequences are assigned by the relayer at commit time and validated
-on chain (`state/execution_queue_v5.rs:221-227, 239-252`):
+Sequences are assigned by POSq/relayer at commit time and validated on
+chain (`state/execution_queue_v5.rs:221-227, 239-252`):
 
 ```rust
 pub fn next_enqueue_sequence(&self) -> u64 {
@@ -131,7 +131,7 @@ pub fn validate_commit_sequence(&self, sequence: u64) -> Result<()> {
 }
 ```
 
-So a relayer can never commit:
+So the fast path can never commit:
 
 - A sequence that's already been executed (`< head`), or
 - A sequence further than `admission_limit` (= 1024 default) past
@@ -174,9 +174,10 @@ the executor is allowed to call
 advance past the missing slot. This trade is: brief stalls preferred
 over indefinite wedging.
 
-In practice the relayer never *intentionally* commits sparse — gaps
-arise only from RPC failures dropping a commit tx. The autodrop
-service handles them automatically.
+In practice the relayer should not intentionally commit sparse — gaps
+arise from RPC failures, lost commits, or other operational faults. The
+autodrop service handles them automatically, and the POSq/commit trail
+is the audit surface for unexplained gaps.
 
 ## Replay protection
 
@@ -199,7 +200,7 @@ replay_cache[replay_write_cursor] = ReplayEntryV5 {
 replay_write_cursor = (replay_write_cursor + 1) % 512;
 ```
 
-So even if a malicious relayer kept your signed payload and tried to
+So even if a malicious fast-path operator kept your signed payload and tried to
 re-submit it, the second commit-reveal would hit the cache and
 fail.
 

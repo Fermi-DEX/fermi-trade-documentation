@@ -1,11 +1,11 @@
 # 25 · gRPC API (Relayer)
 
-The relayer is a stateless gRPC service that:
+The relayer is the gRPC entry point for the POSq fast path. It:
 
 1. Accepts user-signed intents.
 2. Validates them off-chain (signature, account staleness, oracle
    freshness, health, market constraints).
-3. Assigns a per-market sequence.
+3. Submits the encrypted intent into POSq's per-market sequencing path.
 4. Commits to the on-chain v5 queue in batches of up to 64.
 5. Returns the assigned sequence to the user immediately.
 
@@ -38,7 +38,7 @@ message SubmitIntentRequest {
 }
 
 message SubmitIntentResponse {
-  uint64 sequence       = 1;  // assigned per-market FIFO position
+  uint64 sequence       = 1;  // POSq-assigned per-market FIFO position
   string tx_signature   = 2;  // commit tx signature on Solana
   uint64 accepted_slot  = 3;  // slot at which the relayer admitted you
   uint64 expires_at_slot= 4;  // slot beyond which the intent auto-fails
@@ -53,10 +53,10 @@ something different from what it sent.
 
 ### Acknowledgement timing
 
-`SubmitIntent` returns after the relayer has committed the intent
-on chain (i.e. the commit tx is submitted and accepted by the
-RPC). Reveal/execute happens later; the response does **not** wait
-for the fill.
+`SubmitIntent` returns after the intent has been sequenced by the POSq
+fast path and the relayer has committed it on chain (i.e. the commit tx
+is submitted and accepted by the RPC). Reveal/execute happens later; the
+response does **not** wait for the fill.
 
 To wait for the fill, subscribe to the harness fanout SSE stream
 and watch for an event with your `client_order_id` (or your

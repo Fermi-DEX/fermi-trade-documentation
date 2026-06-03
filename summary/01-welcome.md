@@ -8,7 +8,7 @@ description: What Fermi Trade is and what makes it different
 Fermi Trade is a **non-custodial, fully on-chain perpetual-futures
 exchange** built on Solana. You keep custody of your collateral, you
 sign every order yourself, and every fill, funding payment, and
-liquidation settles on the public ledger.
+liquidation executes on the public ledger.
 
 There is no off-chain matching engine deciding your fills, no
 off-chain risk database holding your margin, and no escrow account
@@ -23,9 +23,11 @@ the only thing that can move value.
   market. Your risk is one signed-USD health number.
 - **A real on-chain order book.** Strict price-time priority, the same
   model a professional venue uses — but verifiable by anyone.
-- **Fair ordering you don't have to trust.** Orders are sequenced
-  first-come-first-served by the POSq sequencing layer and the order
-  is locked on chain before anyone can see what your order contains.
+- **Fair ordering you can audit.** Orders are sequenced by POSq over
+  encrypted VDF ticks, then locked on chain before they execute. In v1,
+  POSq runs in single-sequencer mode, so reordering is detectable rather
+  than hidden in a black box; v2 adds voting, leader rotation, and
+  permissionless participation.
 - **Centralized-exchange responsiveness.** An optimistic read layer
   shows your fills in milliseconds, while on-chain finality follows a
   beat behind.
