@@ -67,7 +67,7 @@ evaluating the system. It explains both *how Fermi-v1 works* and
 
 ### Execution queue
 - **[20 - Execution Queue v5](20-execution-queue.md)** — Per-market
-  FIFO, commit/reveal, sequencing, gap recovery, autodrop.
+  AMQ-style FIFO, commit/reveal, sequencing, gap recovery, autodrop.
 - **[21 - Direct Fallback Pool](21-direct-fallback.md)** — Censorship-
   resistant submission path.
 - **[30 - POSq Sequencing](30-posq-sequencing.md)** — Verifiable

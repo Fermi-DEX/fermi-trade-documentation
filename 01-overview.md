@@ -17,9 +17,9 @@ Fermi-v1 is built around four cleanly separated components:
    POSq runs in single-sequencer mode, making reordering detectable
    rather than hidden in a black-box sequencer. V2 is planned to add
    voting, leader rotation, and permissionless participation.
-3. A **per-market commit/reveal execution queue** (the v5 queue) built
-   into that program, which anchors the POSq order on chain before
-   intents touch the book.
+3. A **per-market AMQ-style commit/reveal execution queue** (the v5
+   queue) built into that program, which anchors the POSq order on chain
+   before intents touch the book.
 4. The **optimistic harness** — an off-chain read layer that
    publishes optimistic and confirmed state to traders over
    HTTP / SSE, so they see their orders reflected in milliseconds
@@ -34,7 +34,8 @@ together and why the design is both fast and fair.
   back perp positions across all markets in the group. Health is a
   single signed-USD number.
 - **FIFO orderbook.** Two trees per side — fixed price and oracle-
-  pegged — both ordered strictly by price-time.
+  pegged — both ordered strictly by price-time, enforced through the
+  on-chain AMQ-style execution queue.
 - **Verifiable order sequencing.** [POSq](30-posq-sequencing.md)
   sequences encrypted intents over VDF ticks, then every order is
   hash-committed on chain *before* it executes. Reordering relative to
@@ -44,9 +45,9 @@ together and why the design is both fast and fair.
 - **Censorship fallback.** A direct-submission pool lets users get
   orders into the queue even if the v1 fast path is offline or refusing
   admission.
-- **Public, low-latency reads.** The optimistic harness exposes
-  optimistic order-book and account state over SSE; the fanout service
-  scales it horizontally.
+- **Public, low-latency reads.** The optimistic harness pre-plays the
+  deterministic on-chain path and exposes optimistic order-book and
+  account state over SSE; the fanout service scales it horizontally.
 
 ## The stack at a glance
 

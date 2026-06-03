@@ -6,6 +6,11 @@ Every term used elsewhere in these docs.
 - **AbortTransaction** — A self-trade behavior that fails the entire
   transaction if the new order would match an existing order from the
   same Fermi account.
+- **AMQ** — Asynchronous Market Queue. A Solana-program primitive where
+  market actions are queued in program state and executed later in an
+  application-defined order. Fermi uses an AMQ-style execution queue to
+  enforce on-chain FIFO after POSq has produced the market sequence. See
+  [20 - Execution Queue v5](20-execution-queue.md).
 - **Admission window** — The range of sequence numbers a relayer can
   commit at any time: `[next_sequence_to_execute,
   next_sequence_to_execute + admission_limit)`. Default
@@ -157,8 +162,8 @@ Every term used elsewhere in these docs.
   (= sum of absolute base lots across all shorts).
 - **Optimistic view** — Optimistic harness state = confirmed view +
   relayer-accepted intents not yet finalized on chain. Predicts the
-  on-chain outcome in milliseconds; safe because the matcher is
-  deterministic. Contrast **Confirmed view**.
+  on-chain outcome in milliseconds by pre-playing the deterministic
+  POSq sequence, AMQ queue, and matcher. Contrast **Confirmed view**.
 - **OraclePegged order** — Limit order whose price is `oracle_price +
   offset_lots`. Stored in the `OraclePegged` tree. Has a `peg_limit`
   ceiling/floor and a `max_oracle_staleness_slots` validity window.

@@ -139,8 +139,9 @@ Typically sub-second when the network is healthy:
 - Reveal/execute: 1-2 more slots.
 
 So **~1-2 seconds** end-to-end is normal, faster on optimistic
-view (the harness shows your intent applied as soon as the
-relayer accepts it).
+view. The harness does not invent a provisional fill; it pre-plays the
+committed sequence through the same deterministic AMQ-style queue and
+matching logic the on-chain program will run.
 
 ### Can POSq / the relayer reorder my orders?
 
@@ -148,8 +149,8 @@ Within a market — not silently. In v1,
 [POSq](30-posq-sequencing.md) runs in single-sequencer mode and orders
 encrypted transactions over VDF ticks. The emitted POSq order, queue
 commit, and reveal trail make reordering detectable, and the on-chain
-queue enforces the committed sequence. Across markets, each market has
-its own queue, so ordering is only defined per market.
+AMQ-style queue enforces the committed sequence. Across markets, each
+market has its own queue, so ordering is only defined per market.
 
 ### Can POSq / the relayer drop my order?
 

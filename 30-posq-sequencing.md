@@ -23,9 +23,10 @@ Execution is on chain. The deployed Fermi program owns the order book,
 matching engine, order placement, cancels, fills, risk checks, funding,
 PnL settlement, and liquidation. POSq does not match orders, mutate
 balances, own custody, or decide whether an order is valid. It only
-produces an ordered stream of intents for the on-chain queue to enforce.
+produces an ordered stream of intents for the on-chain AMQ-style queue
+to enforce.
 
-The optimistic harness is separate again. It can simulate the
+The optimistic harness is separate again. It can pre-play the
 deterministic on-chain path so traders see a fast pre-confirmation, but
 that simulation is non-binding. The chain remains the only authority.
 
@@ -94,18 +95,37 @@ admission, liveness, and single-operator control. They do not change the
 core exchange model: POSq remains the off-chain sequencing layer, and
 the Fermi program remains the on-chain execution authority.
 
-## How POSq connects to FCFS
+## How POSq connects to AMQs and FCFS
 
 Fermi's first-come-first-served guarantee is enforced in two layers:
 
 1. POSq emits an auditable per-market order.
-2. The on-chain execution queue commits and executes that order
-   monotonically.
+2. The on-chain AMQ-style execution queue commits and executes that
+   order monotonically.
 
 The queue does not execute an intent just because the relayer says so.
 At reveal time, the program checks the committed hash, account hash,
 user signature, replay cache, expiry, health, and market rules. Only
 then does the program dispatch the intent into the matching engine.
+
+AMQ means **Asynchronous Market Queue**: market actions are admitted into
+program state and executed later in the order the application specifies.
+Temporal describes AMQs as a Solana-program primitive for
+application-controlled execution, where queued asynchronous instructions
+can be tagged with ordering metadata and processed later without Solana
+protocol changes. See
+[Application Controlled Execution through Asynchronous Market Queues](https://www.temporal.xyz/writings/application-controlled-execution-ace-through-asynchronous-market-queues-amqs).
+Fermi uses that primitive for strict FIFO rather than for
+cancel-before-order priority: the application-defined order is the POSq
+sequence, and the on-chain queue advances through that sequence one head
+at a time.
+
+This deterministic split is what unlocks optimistic pre-play. Once POSq
+has fixed the sequence and the AMQ queue has committed it, the optimistic
+harness can replay the same deterministic matching path the program will
+execute. Other venues with discretionary or mutable ordering cannot make
+the same prediction, because the off-chain preview may no longer match
+the order that actually executes.
 
 ## How to read POSq claims in these docs
 
@@ -120,6 +140,7 @@ means:
   v1 gaps;
 - v2 is planned to add voting, leader rotation, and permissionless
   participation;
+- the AMQ-style execution queue enforces the emitted order on chain;
 - all execution remains on chain.
 
 ## Related

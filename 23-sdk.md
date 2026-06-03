@@ -91,7 +91,8 @@ for await (const ev of harness.subscribeFills('SOL-PERP')) {
 
 The harness client wraps SSE for streaming and HTTP for one-shots.
 It supports both an **optimistic** view (relayer-accepted, not yet
-confirmed) and a **confirmed** view (chain-finalized) via a `?view=`
+confirmed, but deterministically pre-played through the on-chain queue
+and matcher) and a **confirmed** view (chain-finalized) via a `?view=`
 query param.
 
 ## Rust (`fermi-client` / `fermi-v1-client`)

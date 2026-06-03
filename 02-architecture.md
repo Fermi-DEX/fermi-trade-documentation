@@ -55,7 +55,7 @@ choose.
    │                FERMI-V1 ON-CHAIN EXCHANGE PROGRAM                  │
    │                                                                    │
    │   ExecutionQueueV5  →  matching engine  →  risk engine            │
-   │   (FCFS sequencing)    (FIFO order book)   (cross-margin health)  │
+   │   (AMQ FIFO queue)     (FIFO order book)   (cross-margin health)  │
    │                                                                    │
    │   Group · Bank · FermiAccount · PerpMarket · BookSide · EventQueue │
    └──────────────────────────────────────────────────────────────────┘
@@ -70,7 +70,8 @@ choose.
 This is the **only authority**. It is a Solana program that owns:
 
 - The **execution queue** (`ExecutionQueueV5`) — a per-market,
-  first-come-first-served sequencer.
+  AMQ-style queue that enforces first-come-first-served execution on
+  chain.
 - The **matching engine** — a price-time-priority FIFO order book.
 - The **order actions** — placement, cancels, matching, event
   consumption, and book mutation.
@@ -86,6 +87,13 @@ Nothing off-chain can move your funds, change a fill, or execute a
 trade. The off-chain components exist to make the on-chain program
 **fast to use**, **explicitly sequenced**, and **fast to observe** —
 they have no matching authority.
+
+The execution queue is the on-chain primitive that makes the FIFO claim
+real. It follows the Asynchronous Market Queue (AMQ) pattern: market
+actions are admitted into program state, tagged with a market sequence,
+and later executed by the program in the application's chosen order. In
+Fermi's case, that chosen order is strict per-market FIFO over the
+POSq-produced sequence. See [20 - Execution Queue v5](20-execution-queue.md).
 
 This is the bedrock of the trust model: if every off-chain component
 disappeared tomorrow, your funds, orders, and positions would be exactly
@@ -183,16 +191,18 @@ Crucially, the harness publishes **two views**:
   reconcile against.
 - **Optimistic view** — the confirmed view *plus* the intents the
   POSq/relayer has already accepted but which have not yet been
-  finalized on chain. Because the matching engine is deterministic
-  and the harness can replay an accepted intent against its
-  mirror, the optimistic view predicts the on-chain outcome
-  **before the block lands**.
+  finalized on chain. Because ordering is fixed by POSq, enforced by
+  the on-chain AMQ-style queue, and matched by deterministic program
+  logic, the harness can replay an accepted intent against its mirror
+  and predict the on-chain outcome **before the block lands**.
 
 The optimistic view is what gives a trader sub-second feedback:
-"your order is sequenced at position N and, against the current
-book, it fills 1.4 SOL at \$150.2." Confirmation follows a beat
-later and — because the same deterministic matcher runs in both
-places — matches the prediction.
+"your order is sequenced at position N and, against the current book, it
+fills 1.4 SOL at \$150.2." Confirmation follows a beat later and —
+because the same deterministic queue and matcher run in both places —
+matches the prediction. This optimistic pre-play is unavailable on
+venues where ordering is discretionary, hidden, or mutable after the
+off-chain preview has been computed.
 
 The **fanout** service sits in front of the harness's event stream
 and re-broadcasts it to many subscribers at once, so thousands of
@@ -224,11 +234,11 @@ sequenced, revealed intents.
        → Fanout broadcasts the FillEvent over SSE.
 ```
 
-The trader experiences `t0+` — milliseconds. The chain reaches
-finality at `t2` — a second or two later. The gap between them is
-bridged by the optimistic view, and it is *safe* to bridge because
-the prediction is made by the same deterministic matcher that the
-chain will run.
+The trader experiences `t0+` — milliseconds. The chain reaches finality
+at `t2` — a second or two later. The gap between them is bridged by the
+optimistic view, and it is *safe* to bridge because the prediction is
+made from the same deterministic order, queue, and matcher that the chain
+will run.
 
 ## Why commit/reveal — the fairness mechanism
 
@@ -276,7 +286,7 @@ hard to get any other way:
 | Property | How the architecture delivers it |
 |---|---|
 | **Fair ordering (FCFS)** | [POSq](30-posq-sequencing.md) encrypted VDF ticks produce an auditable order; one on-chain sequence per market enforces it; commit-before-reveal hides payloads until ordering is locked. |
-| **Low perceived latency** | The optimistic harness predicts fills from accepted intents in milliseconds; deterministic matching guarantees the prediction holds. |
+| **Low perceived latency** | The optimistic harness pre-plays accepted intents in milliseconds; deterministic ordering, AMQ enforcement, and deterministic matching make the prediction meaningful. |
 | **Fully on-chain execution** | The on-chain program is the sole authority for order placement, cancels, matching, fills, risk, and accounting; off-chain components have zero custody and no matching authority. |
 | **Censorship resistance** | In v1, direct fallback lets you enter the queue on chain if the single fast-path sequencer is unavailable or refusing admission; [v2 POSq](30-posq-sequencing.md#v2-consensus-level-safeguards) adds voting, leader rotation, and permissionless participation. |
 | **Throughput** | Per-market queues are independent, so markets commit and execute in parallel; commits are batched up to 64 at a time. |

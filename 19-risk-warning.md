@@ -92,7 +92,7 @@ intent (with new nonce / `client_order_id`) for each retry.
 - A malicious v1 sequencer/relayer can't silently reorder your
   transactions relative to the emitted
   [POSq order](30-posq-sequencing.md) — encrypted VDF ticks, the
-  commitment trail, and on-chain queue commits make reordering
+  commitment trail, and on-chain AMQ queue commits make reordering
   detectable.
 - A malicious relayer can't substitute account lists — the canonical
   user-intent message (`canonical_user_intent_message_v2`,

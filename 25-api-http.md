@@ -76,7 +76,8 @@ selects the source:
 - `confirmed` — latest committed on-chain state. Safe for
   execution and risk decisions.
 - `optimistic` — confirmed + relayer-accepted-not-yet-on-chain
-  intents applied. Useful for UIs and bot decision loops.
+  intents pre-played through the deterministic queue and matcher. Useful
+  for UIs and bot decision loops.
 
 ```json
 {

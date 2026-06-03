@@ -1,15 +1,15 @@
 # 19 · Execution Queue v5
 
-The execution queue (the "v5 queue") is the on-chain state machine that
-enforces the [POSq-produced order](30-posq-sequencing.md) before intents
-touch the order book. Every order placed via the fast path goes through
-it.
+The execution queue (the "v5 queue") is the on-chain AMQ-style state
+machine that enforces the [POSq-produced order](30-posq-sequencing.md)
+before intents touch the order book. Every order placed via the fast
+path goes through it.
 
 Goals it solves:
 
-1. **Verifiable ordering.** Same-market intents execute in the exact
-   order committed from the POSq sequence; a validator that tries to
-   reorder breaks the commit hash and the tx fails.
+1. **On-chain FIFO through AMQs.** Same-market intents execute in the
+   exact order committed from the POSq sequence; a validator that tries
+   to reorder breaks the commit hash and the tx fails.
 2. **Account-substitution resistance.** The account list is part of
    the user-signed intent; a relayer that swaps accounts after
    signing is detected at reveal.
@@ -36,6 +36,33 @@ ExecutionQueueV5
 ```
 
 *Source: `state/execution_queue_v5.rs:302-310`.*
+
+## AMQs: the on-chain FIFO primitive
+
+ExecutionQueueV5 follows the **Asynchronous Market Queue (AMQ)** pattern:
+market actions are not executed immediately when they enter the program.
+They are first queued in program state with explicit ordering metadata,
+then a later crank/reveal instruction executes them in the order chosen
+by the application.
+
+The AMQ pattern was described by Temporal as a way for Solana programs
+to implement application-controlled execution without changing the
+Solana protocol: a program can accept asynchronous instructions, store
+them in its own queue, tag them with ordering metadata such as slot,
+priority, or sequence, and process them later in program-defined order.
+See Temporal's write-up:
+[Application Controlled Execution through Asynchronous Market Queues](https://www.temporal.xyz/writings/application-controlled-execution-ace-through-asynchronous-market-queues-amqs).
+
+Fermi uses that primitive with a deliberately simple policy:
+
+- **one queue per market;**
+- **one monotonic sequence per market;**
+- **one committed hash per sequence;**
+- **strict head advancement by one sequence at a time.**
+
+That is what turns FIFO from a relayer promise into on-chain behavior.
+POSq determines the auditable market sequence, and the AMQ-style queue
+forces the on-chain program to consume that sequence deterministically.
 
 ### `SubQueueHeaderV5` (64 bytes)
 
@@ -161,6 +188,13 @@ pub fn note_head_advanced(&mut self) {
 
 No batch advance, no gap skipping (except via the explicit gap-
 wait mechanism below). Strict FIFO.
+
+This is also what makes optimistic pre-play possible. Once a sequence is
+committed, every observer can replay the same queue head, payload,
+account list, oracle state, and matching logic. A venue whose ordering
+can still change after the preview cannot offer the same deterministic
+pre-confirmation; Fermi can because the queue makes the execution path
+fixed before the reveal is processed.
 
 ## Gaps
 

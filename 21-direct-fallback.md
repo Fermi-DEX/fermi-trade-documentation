@@ -15,7 +15,7 @@ per-market queue, **bypassing the relayer entirely**.
 
 Once staged in the direct pool, the executor (or any keeper) can
 promote it into the main ring after a fixed slot speed-bump, and
-from then on it follows the standard reveal/execute path.
+from then on it follows the standard AMQ-style reveal/execute path.
 
 ## When to use it
 
@@ -57,8 +57,9 @@ The on-chain program:
 
 After the speed-bump, the executor (or any caller) can promote the
 direct entry into the main ring by assigning it a sequence and
-calling the standard reveal/execute path. The reveal path then runs
-the same verification + dispatch as a relayer-committed intent.
+calling the standard reveal/execute path. The reveal path then runs the
+same deterministic queue verification + dispatch as a relayer-committed
+intent.
 
 ## Direct pool vs main ring
 

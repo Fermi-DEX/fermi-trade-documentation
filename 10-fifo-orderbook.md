@@ -149,10 +149,17 @@ near full; the constraint is much more often the per-account
 
 ## Determinism and replay
 
-Because price-time priority is fully encoded in the keys, and keys
-are assigned at *commit* time using the per-market monotonic
-`seq_num`, two off-chain simulators that consume the same event
-stream will arrive at the same book layout. This is the basis of the
-optimistic view maintained by the optimistic harness — it can preplay an intent
-against its mirror and produce the exact fills the on-chain matcher
-will produce, modulo oracle drift in the OraclePegged tree.
+Because price-time priority is fully encoded in the keys, and keys are
+assigned from the per-market monotonic sequence enforced by the AMQ-style
+execution queue, two observers that consume the same committed stream
+arrive at the same book layout. This is the basis of the optimistic view
+maintained by the optimistic harness: it can pre-play an intent against
+its mirror and produce the exact fills the on-chain matcher will produce,
+modulo oracle drift in the OraclePegged tree.
+
+That pre-play depends on deterministic ordering. If an exchange can
+change the order after an optimistic preview is computed, or if its
+matching engine is hidden in an operator database, the preview is only an
+operator promise. On Fermi, the POSq sequence plus on-chain AMQ
+enforcement fixes the order before execution, so the optimistic harness
+can replay the same path the program will run.
