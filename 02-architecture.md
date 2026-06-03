@@ -94,11 +94,12 @@ program directly (see [21 - Direct Fallback Pool](21-direct-fallback.md)).
 
 ### 2. POSq and the relayer
 
-The fast path combines POSq sequencing with relayer plumbing. The
-relayer turns a trader's signed intent into an on-chain queue entry, but
-the ordering claim is not "trust the relayer." POSq sequences encrypted
-transactions over VDF ticks, then the relayer commits that ordered stream
-to the on-chain queue. Per order the fast path:
+The fast path combines [POSq sequencing](30-posq-sequencing.md) with
+relayer plumbing. The relayer turns a trader's signed intent into an
+on-chain queue entry, but the ordering claim is not "trust the relayer."
+POSq sequences encrypted transactions over VDF ticks, then the relayer
+commits that ordered stream to the on-chain queue. Per order the fast
+path:
 
 1. **Receives** a signed *intent* — the order payload plus the
    trader's Ed25519 signature plus the exact account list the
@@ -117,9 +118,10 @@ to the on-chain queue. Per order the fast path:
    signature to the trader, immediately.
 
 The v1 POSq sequencer is **not fully decentralized**, but it is also not
-a black-box sequencer. It emits a VDF-tick ordering trail before reveal;
-once the relayer commits that order, the sequence and a hash of the
-payload are locked on chain. The fast path **cannot**:
+a black-box sequencer. As covered in the [POSq page](30-posq-sequencing.md),
+it emits a VDF-tick ordering trail before reveal; once the relayer
+commits that order, the sequence and a hash of the payload are locked on
+chain. The fast path **cannot**:
 
 - Change your order's contents after you signed it — the reveal
   step re-hashes the payload and checks your signature.
@@ -135,9 +137,10 @@ payload are locked on chain. The fast path **cannot**:
 
 The remaining v1 gap is availability and pre-admission censorship: a
 single sequencer can be down, slow, or refuse an intent before it enters
-the POSq log. The direct fallback pool mitigates that today. V2 is
-planned to add voting, leader rotation, and permissionless participation
-to reduce that single-sequencer liveness/admission assumption.
+the POSq log. The direct fallback pool mitigates that today. The
+[v2 POSq roadmap](30-posq-sequencing.md#v2-consensus-level-safeguards)
+adds voting, leader rotation, and permissionless participation to reduce
+that single-sequencer liveness/admission assumption.
 
 ### 3. The executor (off-chain crank)
 
@@ -272,10 +275,10 @@ hard to get any other way:
 
 | Property | How the architecture delivers it |
 |---|---|
-| **Fair ordering (FCFS)** | POSq encrypted VDF ticks produce an auditable order; one on-chain sequence per market enforces it; commit-before-reveal hides payloads until ordering is locked. |
+| **Fair ordering (FCFS)** | [POSq](30-posq-sequencing.md) encrypted VDF ticks produce an auditable order; one on-chain sequence per market enforces it; commit-before-reveal hides payloads until ordering is locked. |
 | **Low perceived latency** | The optimistic harness predicts fills from accepted intents in milliseconds; deterministic matching guarantees the prediction holds. |
 | **Fully on-chain execution** | The on-chain program is the sole authority for order placement, cancels, matching, fills, risk, and accounting; off-chain components have zero custody and no matching authority. |
-| **Censorship resistance** | In v1, direct fallback lets you enter the queue on chain if the single fast-path sequencer is unavailable or refusing admission; v2 adds voting, leader rotation, and permissionless participation. |
+| **Censorship resistance** | In v1, direct fallback lets you enter the queue on chain if the single fast-path sequencer is unavailable or refusing admission; [v2 POSq](30-posq-sequencing.md#v2-consensus-level-safeguards) adds voting, leader rotation, and permissionless participation. |
 | **Throughput** | Per-market queues are independent, so markets commit and execute in parallel; commits are batched up to 64 at a time. |
 | **Capital efficiency** | A single cross-margin `FermiAccount` backs positions across every market; collateral is not fragmented per market. |
 | **Operational transparency** | Every intent leaves an auditable trail; `GET /trace/sequence/{market}/{seq}` answers "where is my order" in seconds. |
@@ -331,6 +334,9 @@ then the direct on-chain path remains open.
 
 ## Where to read more
 
+- [30 - POSq Sequencing](30-posq-sequencing.md) — the v1
+  single-sequencer model, the v2 roadmap, and how sequencing differs
+  from on-chain execution.
 - [10 - FIFO Order Book](10-fifo-orderbook.md) and
   [11 - Matching Engine](11-matching-engine.md) — the on-chain
   matcher in detail.

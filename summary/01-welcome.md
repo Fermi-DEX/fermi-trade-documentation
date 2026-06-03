@@ -23,11 +23,11 @@ the only thing that can move value.
   market. Your risk is one signed-USD health number.
 - **A real on-chain order book.** Strict price-time priority, the same
   model a professional venue uses — but verifiable by anyone.
-- **Fair ordering you can audit.** Orders are sequenced by POSq over
-  encrypted VDF ticks, then locked on chain before they execute. In v1,
-  POSq runs in single-sequencer mode, so reordering is detectable rather
-  than hidden in a black box; v2 adds voting, leader rotation, and
-  permissionless participation.
+- **Fair ordering you can audit.** Orders are sequenced by
+  [POSq](../30-posq-sequencing.md) over encrypted VDF ticks, then locked
+  on chain before they execute. In v1, POSq runs in single-sequencer
+  mode, so reordering is detectable rather than hidden in a black box;
+  v2 adds voting, leader rotation, and permissionless participation.
 - **Centralized-exchange responsiveness.** An optimistic read layer
   shows your fills in milliseconds, while on-chain finality follows a
   beat behind.

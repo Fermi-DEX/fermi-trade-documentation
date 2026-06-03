@@ -6,7 +6,7 @@ description: The permissionless path that backstops inclusion
 # Direct On-Chain Submission
 
 The fast path on Fermi runs through the
-[POSq sequencing layer](05-posq-sequencing-layer.md). In v1, POSq uses a
+[POSq sequencing layer](../30-posq-sequencing.md). In v1, POSq uses a
 single sequencer that orders encrypted transactions over VDF ticks. That
 makes reordering detectable, but it does not eliminate every
 availability or pre-admission censorship risk. As a backstop, Fermi also

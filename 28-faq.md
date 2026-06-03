@@ -144,11 +144,12 @@ relayer accepts it).
 
 ### Can POSq / the relayer reorder my orders?
 
-Within a market — not silently. In v1, POSq runs in single-sequencer
-mode and orders encrypted transactions over VDF ticks. The emitted POSq
-order, queue commit, and reveal trail make reordering detectable, and
-the on-chain queue enforces the committed sequence. Across markets, each
-market has its own queue, so ordering is only defined per market.
+Within a market — not silently. In v1,
+[POSq](30-posq-sequencing.md) runs in single-sequencer mode and orders
+encrypted transactions over VDF ticks. The emitted POSq order, queue
+commit, and reveal trail make reordering detectable, and the on-chain
+queue enforces the committed sequence. Across markets, each market has
+its own queue, so ordering is only defined per market.
 
 ### Can POSq / the relayer drop my order?
 
@@ -156,9 +157,10 @@ In v1, the single fast-path sequencer can refuse admission or be
 unavailable before your intent enters the POSq log. Once accepted and
 committed, it cannot make a silently accepted order disappear without an
 audit trail — every stage emits a structured event you can query via the
-`/trace/sequence/{market}/{seq}` endpoint. V2 is planned to add voting,
-leader rotation, and permissionless participation to reduce the remaining
-single-sequencer liveness/admission assumption.
+`/trace/sequence/{market}/{seq}` endpoint.
+[V2 POSq](30-posq-sequencing.md#v2-consensus-level-safeguards) is
+planned to add voting, leader rotation, and permissionless participation
+to reduce the remaining single-sequencer liveness/admission assumption.
 
 ### What is "autodrop"?
 
@@ -221,8 +223,9 @@ private disclosure channel rather than a public GitHub issue.
 
 Yes — the relayer/executor binary is open source and is the same code
 the operator runs. You'll need a funded Solana keypair to commit on
-chain and a Pyth-friendly RPC. In v1, POSq production sequencing is
-single-sequencer mode, so running your own relayer does not by itself
+chain and a Pyth-friendly RPC. In v1,
+[POSq production sequencing](30-posq-sequencing.md#v1-single-sequencer-posq)
+is single-sequencer mode, so running your own relayer does not by itself
 make you the sequencer. V2 is planned to add leader rotation and
 permissionless participation.
 

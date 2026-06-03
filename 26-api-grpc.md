@@ -1,6 +1,7 @@
 # 25 · gRPC API (Relayer)
 
-The relayer is the gRPC entry point for the POSq fast path. It:
+The relayer is the gRPC entry point for the
+[POSq fast path](30-posq-sequencing.md). It:
 
 1. Accepts user-signed intents.
 2. Validates them off-chain (signature, account staleness, oracle

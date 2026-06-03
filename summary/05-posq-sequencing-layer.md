@@ -5,6 +5,9 @@ description: Verifiable off-chain sequencing with encrypted VDF ticks
 
 # POSq Sequencing Layer
 
+This is the short summary. For the full v1/v2 treatment, see
+[30 - POSq Sequencing](../30-posq-sequencing.md).
+
 The **POSq sequencing layer** is Fermi's ordering layer. It decides
 which signed intents enter each market first, then anchors that order
 into the on-chain execution queue before the on-chain program matches,

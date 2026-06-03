@@ -74,8 +74,10 @@ payloads are revealed. The resulting order is then locked on chain (see
 [FCFS Ordering](06-fcfs-ordering.md)). That is what turns "fair
 ordering" from a promise into an auditable property.
 
-The POSq layer is documented in detail on its own page —
-[POSq Sequencing Layer](05-posq-sequencing-layer.md).
+The POSq layer is documented in detail on its own pages:
+[POSq Sequencing Layer](05-posq-sequencing-layer.md) for the short
+summary, and [30 - POSq Sequencing](../30-posq-sequencing.md) for the
+full v1/v2 explanation.
 
 ### The optimistic read layer
 

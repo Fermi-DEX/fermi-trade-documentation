@@ -12,11 +12,11 @@ Fermi-v1 is built around four cleanly separated components:
    placement, cancels, the order book, the matching engine, the risk
    engine, funding, and liquidation. It is the single source of truth
    for execution.
-2. The **POSq sequencing layer**, which orders encrypted transactions
-   over VDF ticks before they are revealed. In v1 POSq runs in
-   single-sequencer mode, making reordering detectable rather than
-   hidden in a black-box sequencer. V2 is planned to add voting, leader
-   rotation, and permissionless participation.
+2. The **[POSq sequencing layer](30-posq-sequencing.md)**, which orders
+   encrypted transactions over VDF ticks before they are revealed. In v1
+   POSq runs in single-sequencer mode, making reordering detectable
+   rather than hidden in a black-box sequencer. V2 is planned to add
+   voting, leader rotation, and permissionless participation.
 3. A **per-market commit/reveal execution queue** (the v5 queue) built
    into that program, which anchors the POSq order on chain before
    intents touch the book.
@@ -35,10 +35,10 @@ together and why the design is both fast and fair.
   single signed-USD number.
 - **FIFO orderbook.** Two trees per side — fixed price and oracle-
   pegged — both ordered strictly by price-time.
-- **Verifiable order sequencing.** POSq sequences encrypted intents over
-  VDF ticks, then every order is hash-committed on chain *before* it
-  executes. Reordering relative to the emitted POSq sequence is
-  detectable.
+- **Verifiable order sequencing.** [POSq](30-posq-sequencing.md)
+  sequences encrypted intents over VDF ticks, then every order is
+  hash-committed on chain *before* it executes. Reordering relative to
+  the emitted POSq sequence is detectable.
 - **Replay protection.** A 10-slot, 512-entry intent-hash cache makes
   signature replay impossible.
 - **Censorship fallback.** A direct-submission pool lets users get
@@ -109,7 +109,7 @@ emitted POSq sequence, the VDF-tick/commit trail makes that detectable.
 | Property | Mechanism |
 |---|---|
 | Self-custody | Fermi account is a PDA you own; only your signature can mutate it. |
-| Verifiable ordering | POSq encrypted VDF ticks + per-market sequence + hash commit prior to reveal. |
+| Verifiable ordering | [POSq](30-posq-sequencing.md) encrypted VDF ticks + per-market sequence + hash commit prior to reveal. |
 | Replay-proof | On-chain `replay_cache` of consumed intent hashes (10 slots / 512 entries). |
 | FIFO matching | Composite `(price, !seq)` keys for bids and `(price, seq)` for asks. |
 | Censorship fallback | Direct-submit pool with a fixed slot speed-bump. |

@@ -1,8 +1,9 @@
 # 19 · Execution Queue v5
 
-The execution queue (the "v5 queue") is the on-chain state machine
-that enforces the POSq-produced order before intents touch the order
-book. Every order placed via the fast path goes through it.
+The execution queue (the "v5 queue") is the on-chain state machine that
+enforces the [POSq-produced order](30-posq-sequencing.md) before intents
+touch the order book. Every order placed via the fast path goes through
+it.
 
 Goals it solves:
 

@@ -7,11 +7,11 @@ description: How Fermi makes fair ordering a verifiable property, not a promise
 
 Fermi's defining property is **first-come-first-served (FCFS)
 ordering**: earlier sequenced orders execute before later sequenced
-orders. POSq makes the sequence auditable rather than a private operator
-claim.
+orders. [POSq](../30-posq-sequencing.md) makes the sequence auditable
+rather than a private operator claim.
 
 The order in which trades happen is decided by the
-[POSq sequencing layer](05-posq-sequencing-layer.md), which in v1
+[POSq sequencing layer](../30-posq-sequencing.md), which in v1
 sequences encrypted transactions over VDF ticks in single-sequencer
 mode. What this page explains is how that order is *enforced and
 verified on chain*, so FCFS is something you can check rather than
@@ -83,7 +83,7 @@ market.
 
 ## Related
 
-- [POSq Sequencing Layer](05-posq-sequencing-layer.md) — who assigns
+- [POSq Sequencing Layer](../30-posq-sequencing.md) — who assigns
   the order in the first place.
 - [Fast Pre-Confirmations](07-fast-pre-confirmations.md) — how you see
   your fill before finality.

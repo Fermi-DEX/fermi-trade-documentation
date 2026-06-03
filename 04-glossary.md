@@ -192,7 +192,8 @@ Every term used elsewhere in these docs.
 - **POSq** — Fermi's verifiable sequencing scheme. In v1 it runs in
   single-sequencer mode, ordering encrypted transactions over VDF
   ticks so reordering is detectable. V2 is planned to add voting,
-  leader rotation, and permissionless participation.
+  leader rotation, and permissionless participation. See
+  [30 - POSq Sequencing](30-posq-sequencing.md).
 - **Relayer** — Off-chain gRPC service that accepts user intents,
   validates them, and commits POSq-ordered intent hashes to the
   on-chain v5 queue. It cannot alter, silently reorder an emitted POSq

@@ -18,6 +18,7 @@ reference. They are intended to drop into a Mintlify-style docs site.
 **Design**
 4. `04-architecture.md` — How Fermi is built and why it is both fair and fast
 5. `05-posq-sequencing-layer.md` — The POSq sequencing layer
+   (short summary; full page is `../30-posq-sequencing.md`)
 6. `06-fcfs-ordering.md` — First-come-first-served ordering
 7. `07-fast-pre-confirmations.md` — Millisecond pre-confirmations
 8. `08-amqs.md` — *(placeholder — see note below)*
@@ -59,7 +60,8 @@ reference. They are intended to drop into a Mintlify-style docs site.
   should be precise: v1 uses single-sequencer POSq over encrypted VDF
   ticks, making reordering detectable rather than hidden in a black-box
   sequencer. V2 adds voting, leader rotation, and permissionless
-  participation to address remaining inclusion/liveness gaps.
+  participation to address remaining inclusion/liveness gaps. Link
+  claims back to `../30-posq-sequencing.md` where possible.
 - **AMQs.** "AMQs" was requested as one of the opinionated design
   pillars, but the term does not appear in the supplied technical
   documentation, so `08-amqs.md` is a flagged placeholder. Please

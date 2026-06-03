@@ -1,10 +1,11 @@
 # 20 · Direct Fallback Pool
 
-POSq/relayer is the fast path on Fermi. In v1 it runs with a single
-sequencer that orders encrypted transactions over VDF ticks, making
-reordering detectable. If you can't reach that fast path, or if it
-refuses admission before your intent enters the POSq log, there is a
-permissionless on-chain alternative: the **direct submission pool**.
+[POSq/relayer](30-posq-sequencing.md) is the fast path on Fermi. In v1
+it runs with a single sequencer that orders encrypted transactions over
+VDF ticks, making reordering detectable. If you can't reach that fast
+path, or if it refuses admission before your intent enters the POSq log,
+there is a permissionless on-chain alternative: the **direct submission
+pool**.
 
 ## What it is
 

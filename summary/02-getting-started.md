@@ -38,8 +38,8 @@ account as an interest-bearing balance.
 
 Pick a market (for example SOL-PERP), choose a side and size, and
 submit. The app builds an order, you sign it, and it is handed to the
-POSq sequencing layer, which orders the encrypted intent over VDF ticks
-and locks that position on chain.
+[POSq sequencing layer](../30-posq-sequencing.md), which orders the
+encrypted intent over VDF ticks and locks that position on chain.
 
 Within a fraction of a second you'll see a **pre-confirmation** — your
 predicted fill against the current book. On-chain finality follows a

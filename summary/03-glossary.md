@@ -48,7 +48,8 @@ earlier orders execute first, and nobody can jump the line.
 it runs in single-sequencer mode, ordering encrypted transactions over
 VDF ticks so reordering is detectable. V2 is planned to add voting,
 leader rotation, and permissionless participation. See
-[POSq Sequencing Layer](05-posq-sequencing-layer.md).
+[POSq Sequencing Layer](05-posq-sequencing-layer.md) and
+[30 - POSq Sequencing](../30-posq-sequencing.md).
 
 **Commit / reveal** — The two-step protocol that locks an order's
 sequence and a hash of its contents on chain *before* the contents

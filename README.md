@@ -2,11 +2,11 @@
 
 Fermi-v1 (`frmv1`) is a non-custodial, fully on-chain perpetual-futures
 exchange built on Solana. A single on-chain program owns the order
-book, the cross-margin risk engine, funding, and liquidation; POSq
-sequences encrypted intents over VDF ticks and anchors that order into a
-per-market commit/reveal execution queue; and an optimistic harness
-gives traders millisecond-level feedback while on-chain finality
-follows behind.
+book, the cross-margin risk engine, funding, and liquidation;
+[POSq](30-posq-sequencing.md) sequences encrypted intents over VDF ticks
+and anchors that order into a per-market commit/reveal execution queue;
+and an optimistic harness gives traders millisecond-level feedback while
+on-chain finality follows behind.
 
 This site is the user-facing reference for **traders, market makers,
 liquidators, integrators, and prospective partners**
@@ -19,9 +19,10 @@ evaluating the system. It explains both *how Fermi-v1 works* and
 - **[01 - Overview](01-overview.md)** — What Fermi-v1 is, what makes
   it different, and the moving pieces.
 - **[02 - Architecture](02-architecture.md)** — The on-chain program,
-  POSq sequencing layer, relayer/executor plumbing, and optimistic
-  harness; how they interact; why the design is fair (auditable FCFS)
-  and fast (low optimistic latency); the trust model and viability case.
+  [POSq sequencing layer](30-posq-sequencing.md), relayer/executor
+  plumbing, and optimistic harness; how they interact; why the design is
+  fair (auditable FCFS) and fast (low optimistic latency); the trust
+  model and viability case.
 - **[03 - Getting Started](03-getting-started.md)** — Connect a wallet,
   fund an account, place your first order.
 - **[04 - Glossary](04-glossary.md)** — Every term used in these docs.
@@ -69,6 +70,8 @@ evaluating the system. It explains both *how Fermi-v1 works* and
   FIFO, commit/reveal, sequencing, gap recovery, autodrop.
 - **[21 - Direct Fallback Pool](21-direct-fallback.md)** — Censorship-
   resistant submission path.
+- **[30 - POSq Sequencing](30-posq-sequencing.md)** — Verifiable
+  off-chain sequencing, v1 single-sequencer mode, and the v2 roadmap.
 
 ### Integrating
 - **[22 - Trader Workflow](22-trader-workflow.md)** — End-to-end flow

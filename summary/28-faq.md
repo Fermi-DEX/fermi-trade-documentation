@@ -13,7 +13,7 @@ move. No operator or off-chain service can touch your funds.
 
 ## Who decides the order my trades execute in?
 
-The [POSq sequencing layer](05-posq-sequencing-layer.md) assigns every
+The [POSq sequencing layer](../30-posq-sequencing.md) assigns every
 order its place in line. In v1, POSq runs in single-sequencer mode,
 ordering encrypted transactions over VDF ticks, so reordering is
 detectable rather than hidden in a black-box sequencer. That place is
@@ -34,7 +34,8 @@ silently rewrite an emitted POSq order, edit your order, or replay it.
 In v1, the fast path can still be unavailable or refuse admission before
 your intent enters the POSq log. The fallback is direct on-chain
 submission. See [Architecture](04-architecture.md) and
-[Direct On-Chain Submission](25-direct-onchain-submission.md).
+[Direct On-Chain Submission](25-direct-onchain-submission.md); see
+[30 - POSq Sequencing](../30-posq-sequencing.md) for the v1/v2 split.
 
 ## What collateral can I use?
 
