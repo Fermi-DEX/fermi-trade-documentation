@@ -42,7 +42,7 @@ choose.
    ┌─────────────────┐              │                      │
    │   POSq / RELAYER │             ▼                      ▼
    │  (encrypted VDF  │     ┌──────────────────┐   ┌────────────────┐
-   │   tick ordering) │     │ CONTINUUM HARNESS │   │    FANOUT       │
+   │   tick ordering) │     │ OPTIMISTIC HARNESS│   │    FANOUT       │
    │                  │     │ (off-chain read / │   │ (SSE broadcast) │
    │ - validate       │     │  optimistic layer)│   │                 │
    │ - assign seq     │     └────────▲──────────┘   └───────▲────────┘
