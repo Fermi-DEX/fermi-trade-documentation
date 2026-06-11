@@ -1,20 +1,29 @@
 # 13 · Fees
 
-Every fee on Fermi is on-chain, programmatic, and credited to one of
-two destinations: the **PerpMarket fee bucket** (eventually
-withdrawable by the group owner) or directly to a counterparty
-(maker rebates, settlement bonuses, liquidator profit). There are no
-hidden off-chain fees.
+Current trading fees are fixed across all Fermi perp markets:
 
-This page enumerates every fee, where it's defined on chain, and a
-worked example.
+| Side | Current rate | Effect |
+|---|---:|---|
+| Taker | **0.06%** | Charged to the crossing order. |
+| Maker | **-0.03%** | Paid as a rebate to the resting order. |
+| Protocol share | **0.03%** | Net of taker fee minus maker rebate. |
+
+There are no fee tiers, volume discounts, maker tiers, VIP levels, or
+market-specific trading-fee schedules. A fill on SOL-PERP, ETH-PERP, and
+BTC-PERP uses the same taker fee, maker rebate, and protocol share.
+
+This page covers **on-chain protocol fees**: trading fees, maker
+rebates, IOC / Market penalties, settlement bonuses, liquidation fees,
+and fee withdrawal. Relayer SOL fee credits are a separate off-chain
+relayer accounting system, not part of the on-chain trading-fee
+mechanism.
 
 ## Trading fees (per fill)
 
 | Field | Meaning | Sign |
 |---|---|---|
-| `PerpMarket.maker_fee` | Fee paid by the resting side. | May be **negative** = rebate. |
-| `PerpMarket.taker_fee` | Fee paid by the crossing side. | Must be ≥ 0. |
+| `PerpMarket.maker_fee` | Fee paid by the resting side; currently `-0.0003`. | May be **negative** = rebate. |
+| `PerpMarket.taker_fee` | Fee paid by the crossing side; currently `0.0006`. | Must be ≥ 0. |
 | `PerpMarket.fee_penalty` | Fixed quote-native fee on every IOC / Market order. | ≥ 0. |
 
 Both `maker_fee` and `taker_fee` are stored as `I80F48` and are
@@ -24,7 +33,8 @@ applied as a **fraction of notional**:
 fill_notional = match_base_lots × match_price × base_lot_size  (in quote native)
 
 taker_fee_paid     = fill_notional × taker_fee
-maker_fee_received = fill_notional × maker_fee   // negative if maker_fee < 0
+maker_rebate       = fill_notional × -maker_fee  // when maker_fee < 0
+protocol_share     = fill_notional × (taker_fee + maker_fee)
 ```
 
 The `fee_penalty` is a flat amount, charged on entry to `new_order`
@@ -54,9 +64,9 @@ market.fees_accrued += taker_fees + maker_fees
 taker.taker_volume  += quote_filled
 ```
 
-Note the **maker fee is netted against taker fee** in the fee
-bucket: a 0.04 % taker, -0.02 % maker fill leaves `0.02 %` accrued
-to the protocol per side.
+Note the **maker rebate is netted against taker fee** in the fee bucket:
+the current 0.06% taker fee and -0.03% maker fee leave a 0.03% protocol
+share.
 
 The **maker's account** is credited the rebate (or charged the
 fee) only when `perp_consume_events` runs; the matcher only updates
@@ -136,7 +146,7 @@ Token fees follow the same pattern but on the Bank
 
 Assume:
 
-- `taker_fee = 0.0004` (4 bps), `maker_fee = -0.0002` (-2 bps rebate),
+- `taker_fee = 0.0006` (6 bps), `maker_fee = -0.0003` (-3 bps rebate),
   `fee_penalty = 0.001` (USDC native ≈ 0.001 USDC)
 - Order: bid 1 SOL at `$150`, IOC.
 - Fills 1 SOL at `$150` against a resting maker.
@@ -144,18 +154,18 @@ Assume:
 ```
 match_notional = 1 SOL × $150 = $150 = 150_000_000 native
 
-taker_fee_paid     = 150_000_000 × 0.0004 = 60_000 native ($0.06)
-maker_fee_received = 150_000_000 × 0.0002 =  30_000 native ($0.03)
+taker_fee_paid     = 150_000_000 × 0.0006 = 90_000 native ($0.09)
+maker_rebate       = 150_000_000 × 0.0003 = 45_000 native ($0.045)
 
-market.fees_accrued += 60_000 - 30_000 = 30_000  ($0.03 net)
+market.fees_accrued += 90_000 - 45_000 = 45_000  ($0.045 net)
 
-taker.quote -= 60_000 + 1_000 (fee_penalty)        = -61_000 ($0.061)
-maker.quote += 30_000   (credited when consume_events runs)
+taker.quote -= 90_000 + 1_000 (fee_penalty)        = -91_000 ($0.091)
+maker.quote += 45_000   (credited when consume_events runs)
 ```
 
-The taker has spent `$0.061` total fees + penalty for `$150` of
-notional volume. The maker netted `$0.03` rebate. The protocol
-captured `$0.03`.
+The taker has spent `$0.091` total fees + penalty for `$150` of
+notional volume. The maker netted `$0.045` rebate. The protocol
+captured `$0.045`.
 
 ## A few non-obvious things
 
