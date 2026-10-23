@@ -39,4 +39,4 @@ Cancel remaining orders, close the base, consume events, settle funding/PnL and 
 
 ## Implementation reference
 
-Reviewed at `90267b20`. [fermi_account_components.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/fermi_account_components.rs) · [perp_settle_pnl.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/instructions/perp_settle_pnl.rs) · [cache.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/health/cache.rs). Source links require access to the implementation repository.
+Reviewed at `90267b20`. [fermi_account_components.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [perp_settle_pnl.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [cache.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs). Source links require access to the implementation repository.

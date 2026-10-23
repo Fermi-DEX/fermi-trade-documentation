@@ -1,34 +1,71 @@
-# Getting started
+# Getting started on r9
 
-Before depositing, identify the deployment you intend to use. A program address, group, market index and RPC cluster form one configuration. Mixing addresses from different releases can produce invalid accounts or signatures.
+The current client workflow uses [Fermi-v1-sdk](23-sdk.md) and the `fermi-r9-mainnet` preset. Account creation, deposits, withdrawals and orders use real mainnet funds.
 
-## Prepare an account
+## Prepare the client
 
-1. Obtain the current deployment configuration from the operator. Check the program owner and executable status through your RPC, then load the group and market accounts.
-2. Connect a wallet with SOL for transaction fees and account rent. Use a separate trading key if you delegate trading.
-3. Create a FermiAccount for that owner and account number. Allocate enough token, perp and open-order slots for the intended strategy.
-4. Deposit a supported token through the core program. The deposit creates an indexed bank balance; it is not a transfer to the relayer.
-5. Read initial and maintenance health before placing an order.
+1. Install the pinned SDK with the [SDK instructions](23-sdk.md).
+2. Copy its r9 environment example to `.env`.
+3. Set `FERMI_API_KEY`, `USER_KEYPAIR`, and your `CLUSTER_URL`.
+4. Remove program and group overrides from older deployments.
+5. Run `npm run config` to read current deployment parameters.
 
-There is no universal minimum SOL balance or static market-address table in these docs. Rent, account size, fees, markets and service URLs depend on the deployment. A historical configuration in the repository is evidence about that release, not a live discovery service.
+`npm run smoke-check` checks RPC, REST, fee and gRPC connectivity. It submits an invalid intent as a probe. It does not place an order.
 
-## Place a first order
+## Create and fund an account
 
-Use a small limit order with an explicit size and price bound. Build the canonical account list with the matching SDK version, sign the intent, and submit it to the relayer. Store the returned market sequence, signed bytes, commitment hash and transaction signatures.
+The wallet needs SOL for rent and transaction fees. It also needs mainnet USDC in its associated token account.
 
-Display the state in stages: submitted, accepted, committed, executed or failed, and confirmed. An optimistic fill can be useful feedback, but it is not sufficient evidence to hedge or withdraw without accepting reconciliation risk.
+```bash
+FERMI_ACCOUNT_NAME=my-account npm run create-fermi-account
+```
 
-For a resting order, cancellation is another action. A cancel submitted after an earlier taking order cannot retroactively prevent that trade. Check the cancel result and residual position.
+Copy `fermi_account` from the output into `FERMI_ACCOUNT_PK` in `.env`. If the selected account number already exists, the command stops with its address.
 
-## Exit cleanly
+Default capacities are one token slot, zero Serum3 slots, three perp slots and 32 open-order slots. r9 requires `FERMI_ACCOUNT_SERUM3_COUNT=0`.
 
-Cancel resting orders, close base exposure, consume pending fill events, settle remaining perp PnL when possible, then withdraw available collateral. A zero base position alone does not imply zero funding, PnL, debt or open-order state.
+This command transfers real USDC from the wallet to the account:
 
-For local development, the implementation repository provides `startup_local.sh` and execution-queue bootstrap scripts. On devnet, test-token funding and a core deposit are separate steps. Test tokens have no mainnet value.
+```bash
+USDC_AMOUNT_UI=5 npm run deposit-usdc
+```
 
-FLP users should start with [the vault lifecycle](33-flp-lifecycle.md): a public pre-deposit and a live trading deposit have different consequences.
+The command does not mint USDC or create a missing trading account. `5` means five USDC, not five native units.
 
+## Read balances and fund service fees
 
-## Implementation reference
+```bash
+OWNER=<wallet-public-key> npm run portfolio
+npm run onchain-portfolio
+```
 
-Reviewed at `90267b20`. [README.md](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/README.md) · [client.ts](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/src/client.ts). Source links require access to the implementation repository.
+`portfolio` reads gateway state. `onchain-portfolio` reads Solana RPC and requires `FERMI_ACCOUNT_PK`.
+
+Relayer fee credit is separate from USDC margin and wallet SOL. Read and fund that ledger through `FermiV1FeeClient`. The [fee instructions](14-fees.md) explain the deposit address, memo and mainnet chain label.
+
+## Simulate and trade
+
+This command reads a simulation after warming its cache:
+
+```bash
+SIMULATE_OWNER=<wallet-public-key> SIMULATE_MARKET=SOL-PERP \
+  SIMULATE_SIDE=buy SIMULATE_QUANTITY=0.01 SIMULATE_PRICE=80 npm run simulate
+```
+
+A simulation does not submit an order or guarantee later execution. The [trader workflow](22-trader-workflow.md) shows explicit placement and cancellation.
+
+The r9 market indices are `0` for SOL-PERP, `1` for ETH-PERP and `2` for BTC-PERP. Read current lot sizes and fees from `/config`.
+
+## Withdraw collateral
+
+This command transfers real USDC to the owner ATA, subject to account health:
+
+```bash
+USDC_AMOUNT_UI=5 WITHDRAW_ALLOW_BORROW=false npm run withdraw-usdc
+```
+
+The command creates the destination ATA if necessary. Open orders, positions and account health can limit withdrawals. A failed withdrawal does not establish a zero balance.
+
+## SDK reference
+
+Reviewed at `5318a579`. [USAGE.md](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/USAGE.md) · [src/bin/create-fermi-account.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/bin/create-fermi-account.ts) · [src/bin/deposit-usdc.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/bin/deposit-usdc.ts) · [src/bin/withdraw-usdc.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/bin/withdraw-usdc.ts).

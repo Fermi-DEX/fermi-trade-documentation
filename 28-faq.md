@@ -22,7 +22,7 @@ No. The current on-chain duplicate guard is 512 entries with 20-slot retention, 
 
 ## Can I always use direct fallback?
 
-Only when that market's direct pool exists, is enabled and can progress. It has capacity, expiry and speedbump rules and still depends on transaction inclusion and valid execution state.
+The reviewed r9 SDK preset rejects direct submission because its direct pools are marked uninitialized. For another deployment, fallback is available only when that market's direct pool exists, is enabled and can progress. It has capacity, expiry and speedbump rules and still depends on transaction inclusion and valid execution state.
 
 ## Why is profitable PnL not withdrawable?
 

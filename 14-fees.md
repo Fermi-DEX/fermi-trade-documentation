@@ -12,9 +12,21 @@ IOC-style immediate orders can also incur a configured flat penalty even when no
 
 ## Transaction and relayer costs
 
-Solana transaction fees and rent are different from trading fees. The relayer may maintain a separate fee-credit ledger. `max_fee_lamports` in the submit request is a relayer-local cap; it is not interchangeable with a price limit or an on-chain trading-fee field.
+Solana transaction fees and rent are different from trading fees. The r9 relayer uses a separate SOL fee-credit ledger for each owner/account pair. `max_fee_lamports` in the submit request is a relayer-local cap; it is not interchangeable with a price limit or an on-chain trading-fee field.
 
 Before retrying an uncertain request, reconcile its identity and transaction state. Signing a new request can create another action and another fee.
+
+## Fund relayer fees with the SDK
+
+Construct `FermiV1FeeClient` with `{ gatewayUrl, apiKey }`. Call `getStatus({ userOwner, fermiAccount, group, market })` for the current deposit address, memo, quote and available credit.
+
+USDC margin and wallet SOL do not automatically fund this ledger. Use the returned deposit address and memo. `depositFeeCredit` sends a real SOL transfer and reports its signature to the gateway. Mainnet callers must set `sourceChain: 'solana-mainnet'`, because the helper's legacy default is devnet.
+
+For a manual deposit, place the memo before the SOL transfer. Report the confirmed transfer with `reportDeposit`, using its actual instruction index. Duplicate reports use the signature and instruction index for deduplication.
+
+Order and cancellation helpers accept `maxFeeLamports: 'AUTO'` or an explicit integer string. This cap is a service preference outside the signed intent digest. Read available credit before submission because concurrent requests can reserve it.
+
+The SDK [fee guide](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/docs/fee-path-end-to-end.md) contains the complete deposit example.
 
 ## FLP fees
 
@@ -27,4 +39,4 @@ For reporting, separate trade fees, funding, settlement effects, service costs a
 
 ## Implementation reference
 
-Reviewed at `90267b20`. [book.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/orderbook/book.rs) · [perp_market.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/perp_market.rs) · [bank.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/bank.rs) · [fees.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/bin/service-mango-execution-engine/src/fees.rs) · [math.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/math.rs) · [state.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/state.rs). Source links require access to the implementation repository.
+Protocol reviewed at `90267b20`; standalone SDK references at `5318a579`. [book.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [perp_market.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [bank.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [fees.rs — bin source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/bin) · [math.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/math.rs) · [state.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/state.rs). Source links require access to the implementation repository.

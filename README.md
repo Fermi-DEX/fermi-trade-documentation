@@ -4,6 +4,8 @@ Fermi is a Solana perpetual-futures exchange with on-chain order books, matching
 
 Start with [the architecture](02-architecture.md). It follows one order through admission, the Asynchronous Market Queue (AMQ), the optimistic harness, and on-chain execution. Then read [FCFS and POSq](30-posq-sequencing.md) for the exact ordering boundary.
 
+Client integrations use [Fermi-v1-sdk](https://github.com/Fermi-DEX/Fermi-v1-sdk), reviewed at `5318a579`. Clients inside `fermi-v1` are deprecated. Start with the [r9 SDK guide](23-sdk.md).
+
 ## Choose a path
 
 | You want to… | Read |

@@ -4,7 +4,7 @@ A FermiAccount is the unit of portfolio risk. It belongs to a group and owner, a
 
 ## Ownership and capacity
 
-The account PDA uses the core program's `FermiAccount` seed, group, owner and account number. Use the SDK derivation instead of adapting an older Mango seed by hand. Position arrays have allocated capacity; having collateral does not guarantee that another perp or order slot is available. Account expansion changes storage capacity, not trading permissions or margin.
+The account PDA uses the core program's `FermiAccount` seed, group, owner and account number. Use `findFermiV1AccountPda` from the standalone SDK for derivation. Position arrays have allocated capacity; having collateral does not guarantee that another perp or order slot is available. Account expansion changes storage capacity, not trading permissions or margin.
 
 The group determines the set of banks, markets, oracle configuration and instruction gates. An account from another group is not interchangeable, even when its owner and token mint match.
 
@@ -25,4 +25,4 @@ The [SDK workflow](23-sdk.md) explains why account lists used for queued intents
 
 ## Implementation reference
 
-Reviewed at `90267b20`. [fermi_account.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/fermi_account.rs) · [account_create.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/accounts_ix/account_create.rs) · [execution_queue_v5.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/instructions/execution_queue_v5.rs). Source links require access to the implementation repository.
+Reviewed at `90267b20`. [fermi_account.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [account_create.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [execution_queue_v5.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs). Source links require access to the implementation repository.

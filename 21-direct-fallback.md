@@ -4,6 +4,14 @@ The v5 direct pool is an alternative admission path that does not require a CTM 
 
 This path is useful only if the deployment creates, enables and services the pool. Newly initialized direct ingress is paused. A source implementation alone does not establish that users have an available fallback on a particular market.
 
+## SDK availability on r9
+
+The reviewed SDK records r9 direct pools as absent at its 23 October 2026 check. Its CLI and high-level direct helpers reject the r9 preset. Use relayed submission for that preset.
+
+For an explicitly prepared custom deployment, use `submitPerpOrderDirect`, `cancelPerpOrderByClientIdDirect`, or `cancelAllPerpOrdersDirect`. Supply the custom program and group. The helpers default to current slot plus 20 for expiry. The low-level builder requires a nonzero expiry. Direct admission does not support `minExecuteSlot`.
+
+These SDK limits are separate from the protocol lifecycle described here.
+
 ## Lifecycle
 
 ```text
@@ -30,4 +38,4 @@ Before advertising it as a censorship fallback, inspect each market's pool and d
 
 ## Implementation reference
 
-Reviewed at `90267b20`. [execution_queue_v5_direct.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/execution_queue_v5_direct.rs) · [execution_queue_v5.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/instructions/execution_queue_v5.rs) · [executionQueue.ts](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/src/executionQueue.ts). Source links require access to the implementation repository.
+Protocol reviewed at `90267b20`; standalone SDK references at `5318a579`. [execution_queue_v5_direct.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [execution_queue_v5.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [intents.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/intents.ts). Source links require access to the implementation repository.

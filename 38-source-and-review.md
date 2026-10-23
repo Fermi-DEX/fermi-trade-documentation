@@ -4,6 +4,14 @@ This documentation describes `Fermi-DEX/fermi-v1` at commit `90267b20df99d0eacf3
 
 The review followed the queue/authorization path, relayer and harness interfaces, matching and health/accounting code, and FLP pricing, lifecycle and recovery handlers. It compared those mechanisms with the existing public docs and the implementation repository's design notes. Source code takes precedence where those notes describe an older release.
 
+## Client source and r9 boundary
+
+Client usage follows `Fermi-DEX/Fermi-v1-sdk` at `5318a579dbb10ea34c182df9330a631a8aea2197`, package version `0.2.0`. The SDK review covers its exports, account client, context, wire encoders, gateway clients, fee helpers, streams and r9 preset.
+
+Clients inside the protocol repository are deprecated. Protocol-source links describe onchain or service mechanisms, not recommended client imports. The standalone SDK has no FLP transaction builders or trigger-order fields at this revision. Its r9 preset rejects direct submission because direct pools are marked uninitialized.
+
+The SDK registry supplies r9 addresses and market identities. This documentation update did not independently attest live deployment state or send trading transactions.
+
 ## Material corrections
 
 | Earlier description | Current explanation and source evidence |
@@ -31,18 +39,20 @@ The latest source also adds approved pre-graduation immediate withdrawals, permi
 
 | Area | Primary implementation |
 | --- | --- |
-| Queue layout and limits | `programs/mango-v4/src/state/execution_queue_v5.rs` |
-| Commit/reveal and recovery | `programs/mango-v4/src/instructions/execution_queue_v5.rs` |
-| Intent encoding and dispatch | `programs/mango-v4/src/instructions/execution_queue.rs` |
-| Matching and price-time keys | `programs/mango-v4/src/state/orderbook/` |
-| Health and account checks | `programs/mango-v4/src/health/cache.rs`, `state/fermi_account.rs` |
-| Funding and loss socialization | `programs/mango-v4/src/state/perp_market.rs` |
-| Relayer allocation/delivery | `bin/service-mango-execution-engine/src/main.rs` |
+| Queue layout and limits | `core program: state/execution_queue_v5.rs` |
+| Commit/reveal and recovery | `core program: instructions/execution_queue_v5.rs` |
+| Intent encoding and dispatch | `core program: instructions/execution_queue.rs` |
+| Matching and price-time keys | `core program: state/orderbook/` |
+| Health and account checks | `core program: health/cache.rs`, `state/fermi_account.rs` |
+| Funding and loss socialization | `core program: state/perp_market.rs` |
+| Relayer allocation/delivery | `execution engine: main.rs` |
 | Harness replay and server | `rust-harness/src/`, `ts/client/scripts/execution-queue/continuum-state-harness.ts` |
 | POSq-facing interface | `ts/client/scripts/execution-queue/continuum_sequencer.proto` |
 | FLP valuation and math | `flp-vault/programs/flp-vault/src/nav.rs`, `math.rs`, `accounting.rs` |
 | FLP lifecycle and exits | `flp-vault/programs/flp-vault/src/instructions/` |
-| FLP ABI and client | `flp-vault/sdk/idl/flp_vault.json`, `sdk/src/index.ts` |
+| FLP instruction ABI | `flp-vault/programs/flp-vault/src/instructions/` |
+| Supported client API | Standalone SDK: `src/index.ts`, `src/accountClient.ts`, `src/trading.ts` |
+| Client wire schema | Standalone SDK: `proto/ctm_sequencer.proto` |
 
 Each mechanism chapter links the relevant files at the reviewed commit. The implementation repository is private, so those links require repository access. Public readers can use the explanations without access; maintainers can trace the details to code.
 
@@ -67,4 +77,4 @@ Before applying these docs to a deployment, match the executable hash/upgrade re
 
 ## Implementation reference
 
-Reviewed at `90267b20`. [execution_queue_v5.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/execution_queue_v5.rs) · [perp_market.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/perp_market.rs) · [recovery.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/instructions/recovery.rs) · [INTEGRATION_GUIDE.md](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/docs/INTEGRATION_GUIDE.md). Source links require access to the implementation repository.
+Reviewed at `90267b20`. [execution_queue_v5.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [perp_market.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [recovery.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/instructions/recovery.rs) · [INTEGRATION_GUIDE.md](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/docs/INTEGRATION_GUIDE.md). Source links require access to the implementation repository.

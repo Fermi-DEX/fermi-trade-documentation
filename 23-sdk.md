@@ -1,36 +1,82 @@
-# SDK and version compatibility
+# SDK and r9 compatibility
 
-Use clients built from the implementation revision that matches the target program and service schema. The repository retains Mango-derived package and type names; renaming an import to “Fermi” does not make an older package compatible.
+[Fermi-v1-sdk](https://github.com/Fermi-DEX/Fermi-v1-sdk) is the source for supported client usage. Clients inside `fermi-v1` are deprecated. The protocol repository remains the source for onchain logic.
 
-| Surface | Source |
+The reviewed SDK is `@fermilabs/fermi-v1-sdk` version `0.2.0`, at commit `5318a579`. It bundles the r9 IDL and supports Node.js 22 or later. Its package is private, so these instructions use a pinned source checkout rather than assume a public registry release.
+
+## Install a pinned build
+
+```bash
+git clone https://github.com/Fermi-DEX/Fermi-v1-sdk.git
+cd Fermi-v1-sdk
+git checkout 5318a579dbb10ea34c182df9330a631a8aea2197
+npm install
+npm run validate
+cp .env.fermi-r9-mainnet.example .env
+```
+
+The install hook builds `dist/`. For another local application, install the checkout with `npm install /absolute/path/to/Fermi-v1-sdk`. Imports use `@fermilabs/fermi-v1-sdk`.
+
+## Configure r9
+
+| Configuration | Value or purpose |
 | --- | --- |
-| Core TypeScript client | `ts/client/src/client.ts` |
-| Intent encoding and hashing | `ts/client/src/executionQueue.ts` |
-| Queue account decoding | `ts/client/src/executionQueueLayout.ts` |
-| Core IDL / generated types | `ts/client/src/mango_v4.ts` |
-| Rust clients | `lib/client` |
-| Relayer protobuf | `ts/client/scripts/execution-queue/ctm_sequencer.proto` |
-| FLP TypeScript SDK | `flp-vault/sdk` |
+| `FERMI_DEPLOYMENT` | `fermi-r9-mainnet` |
+| Program | `FRMiX94PWHbndvySq8xyRx185GvPeggUeKaLmZgVdd4` |
+| Group | `2mDvxS4A6bJyR3RjLwvBWeNuFvCAaQ26ss7w1jUChRse` |
+| `FERMI_API_URL` | `https://v1.fermi.trade/prod` for REST and SSE |
+| `FERMI_API_GRPC_ADDR` | `v1.fermi.trade:443`, with TLS |
+| `FERMI_API_KEY` | Gateway UUID from the operator |
+| `CLUSTER_URL` | Your mainnet Solana RPC endpoint |
+| `USER_KEYPAIR` | Absolute path to the signing wallet file |
+| `FERMI_ACCOUNT_PK` | r9 Fermi account address |
+| `FERMI_ACCOUNT_NUM` | Account number for creation and owner lookup, default `0` |
 
-The root package at the reviewed commit is named `@blockworks-foundation/mango-v4`. Do not assume that installing an upstream package with that name gives this fork's v5 or FLP changes. Pin a reviewed build or source revision supplied for the deployment.
+The preset supplies program, group, token and gateway values. Remove stale environment overrides before using it. The SDK ignores `HARNESS_URL`, `RELAYER_ADDR`, and `FEE_HTTP_URL`.
 
-## Canonical account lists
+REST and SSE use `x-api-key`. gRPC uses the same key in metadata. Solana RPC uses its own endpoint. `FermiV1AccountClient` does not need a gateway key, but `createFermiV1Context` requires one.
 
-For relayed v5 perp intents, use `MangoClient.buildExecutionQueueCanonicalPerpRemainingAccounts`. Its health suffix includes the configured perp markets in canonical order along with banks, oracles and other required account types. Do not construct a target-market-only suffix.
+These addresses come from the SDK registry, not a new deployment attestation. Read `getConfig()` or run `npm run config` for current market parameters and fees.
 
-For vault instructions that directly CPI into the core, use the active-position health-account construction expected by that instruction. Pricing paths additionally require event queues; expanded recovery paths require the sidecar last. The lists serve different protocols and cannot be exchanged wholesale.
+## Choose an interface
 
-## Safe numeric handling
+| Task | Export or source |
+| --- | --- |
+| Create and read accounts, deposit or withdraw collateral | `FermiV1AccountClient` |
+| Derive the account PDA | `findFermiV1AccountPda` |
+| Load trading state and signer context | `createFermiV1Context` |
+| Submit and cancel orders | `submitPerpOrderViaRelayer`, `cancelPerpOrderByClientIdViaRelayer`, `cancelAllPerpOrdersViaRelayer` |
+| Read market, account and queue state | `FermiV1StateClient` |
+| Read and fund relayer fees | `FermiV1FeeClient`, `depositFeeCredit` |
+| Build signed payloads and direct instructions | `src/intents.ts` |
+| Build canonical perp account metas | `buildCanonicalPerpRemainingAccounts` |
+| Subscribe to market events | `snapshotAndStreamMarket`, `subscribeMarketEvents` |
+| Inspect the gRPC contract | `proto/ctm_sequencer.proto` |
 
-Use integer/native amounts and fixed-point types for signing and decoding. Keep `u64` values as big integers or decimal strings across JSON boundaries. JavaScript `Number` cannot represent every `u64` exactly. Convert to human units only at presentation boundaries.
+## Account identity and IDL
 
-## Transaction construction
+Use `FermiV1AccountClient.connect` with the r9 program ID. Use `getFermiAccount`, `getFermiAccountForOwner`, and `createFermiAccount` for account operations. The PDA seed and account discriminator use `FermiAccount`.
 
-Simulate against the target deployment, check account privileges and transaction size, then submit. An address lookup table helps only when the selected transaction format and program path support it. The larger vault keeper transaction path in this repository has its own serializer and limits; do not assume it behaves like an ordinary v0 transaction.
+For typed Anchor access, use `client.fermiProgram.account.fermiAccount`. For decoding, use `client.fermiProgram.coder.accounts.decode('fermiAccount', data)`. Exports include `FERMI_V1_IDL`, `FermiV1Idl`, `FermiV1Account`, and `FermiV1Group`.
 
-Validate hashes against the repository's fixtures and inspect the exact ABI before upgrading a client. The SDK is a construction tool; on-chain checks remain authoritative.
+The bundled IDL snapshot predates v5 queue instructions. The SDK constructs those instructions with explicit wire encoders in `src/intents.ts`. An IDL rename does not change signed-message domains. Keep the exact domains in [AMQ authorization](20-execution-queue.md) and [direct submission](21-direct-fallback.md).
 
+## Account lists and numbers
 
-## Implementation reference
+The order helpers call `buildCanonicalPerpRemainingAccounts`. This helper includes all configured perp markets in index order, plus the required banks, oracles and account types. A target-market-only health suffix is insufficient.
 
-Reviewed at `90267b20`. [package.json](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/package.json) · [client.ts](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/src/client.ts) · [executionQueue.ts](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/src/executionQueue.ts) · [executionQueueLayout.ts](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/src/executionQueueLayout.ts) · [index.ts](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/sdk/src/index.ts). Source links require access to the implementation repository.
+High-level order helpers accept UI price and quantity. They convert those values to lots. Select explicit price, size, order type and self-trade behavior. Use `bigint` for low-level integer inputs and IDs. Keep wire `uint64` values as decimal strings across JSON boundaries.
+
+The SDK does not export FLP transaction builders or a general onchain CPI library at this revision. Core queued-order account lists do not replace vault health suffixes. See [FLP integration](35-flp-integration.md) for that boundary.
+
+## Supported surface
+
+The SDK supports relayed placement and cancellation. Its published protobuf does not expose trigger-order fields. Service-side trigger code does not establish a supported SDK workflow.
+
+The r9 preset marks direct pools as uninitialized. Direct helpers reject that preset. Prepared custom deployments can use direct helpers with an explicit program and group. See [direct submission](21-direct-fallback.md).
+
+The SDK constructs requests. Onchain authorization, health and accounting checks determine whether they execute.
+
+## SDK reference
+
+Reviewed at `5318a579`. [package.json](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/package.json) · [src/index.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/index.ts) · [src/accountClient.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/accountClient.ts) · [src/context.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/context.ts) · [src/intents.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/intents.ts) · [src/deployments.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/deployments.ts) · [docs/r9-migration.md](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/docs/r9-migration.md).

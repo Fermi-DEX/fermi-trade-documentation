@@ -25,9 +25,9 @@ The vault authority PDA owns the trading account. The vault program signs deposi
 
 The MM delegate signs ordinary trade intents where the core's delegate-intent gate is enabled. It is distinct from the vault admin, guardian and upgrade authority.
 
-Use the version-matched SDK to build CPIs and health-account suffixes. Supply only the accounts the ABI expects, in the expected order. Extra recovery sidecars belong to the vault wrapper and must not leak into the core health-account list.
+The standalone SDK supplies client transaction builders, not an onchain CPI library or FLP health-account builder. Build program CPIs against the deployed ABI. Supply only the accounts the ABI expects, in the expected order. Extra recovery sidecars belong to the vault wrapper and must not leak into the core health-account list.
 
 
 ## Implementation reference
 
-Reviewed at `90267b20`. [perp_place_order.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/accounts_ix/perp_place_order.rs) · [perp_place_order.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/instructions/perp_place_order.rs) · [fermi_cpi.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/fermi_cpi.rs) · [common.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/instructions/common.rs). Source links require access to the implementation repository.
+Reviewed at `90267b20`. [perp_place_order.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [perp_place_order.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [fermi_cpi.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/fermi_cpi.rs) · [common.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/instructions/common.rs). Source links require access to the implementation repository.

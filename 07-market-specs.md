@@ -35,4 +35,4 @@ FLP market-capacity expansion in the reviewed source permits up to 13 perp slots
 
 ## Implementation reference
 
-Reviewed at `90267b20`. [perp_market.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/perp_market.rs) · [capacity.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/instructions/capacity.rs). Source links require access to the implementation repository.
+Reviewed at `90267b20`. [perp_market.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [capacity.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/instructions/capacity.rs). Source links require access to the implementation repository.

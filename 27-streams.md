@@ -1,32 +1,63 @@
 # Streams and reconciliation
 
-The harness exposes Server-Sent Events (SSE) for one-way updates. Common routes include `/state/stream`, `/state/stream/frontend` and `/state/stream/trades`. Downstream fanout or Redis-backed services can distribute those updates without making every client query the core harness.
+The SDK exposes authenticated SSE subscriptions and a WebSocket tick subscription. These client feeds differ from the upstream Solana RPC or LaserStream inputs that the harness consumes.
 
-Solana RPC WebSocket subscriptions and optional LaserStream ingestion are upstream inputs. They are different from the client-facing SSE API.
+## Start from a snapshot
 
-## Bootstrap a client
+```ts
+import {
+  snapshotAndStreamMarket,
+  subscribeMarketEvents,
+} from '@fermilabs/fermi-v1-sdk';
 
-1. Establish a snapshot and stream strategy supported by the deployed endpoint.
-2. Record snapshot slot/view and any stream cursor or event identity.
-3. Apply updates idempotently; an event can arrive again after reconnect or replay.
-4. Detect gaps, stale data and source changes.
-5. Fetch a fresh snapshot when continuity cannot be established.
+const common = {
+  gatewayUrl: 'https://v1.fermi.trade/prod',
+  apiKey: process.env.FERMI_API_KEY!,
+};
+const snapshot = await snapshotAndStreamMarket({ ...common, market: 0 });
+let cursor = snapshot.cursor;
+// Apply snapshot.snapshot before processing subsequent frames.
+const stream = subscribeMarketEvents({ ...common, market: 0, from: cursor });
+try {
+  for await (const frame of stream) {
+    // Apply the event idempotently before persisting its cursor.
+    console.log(frame.event, frame.data);
+    if (frame.id) cursor = frame.id;
+  }
+} finally {
+  stream.close();
+}
+```
 
-SSE reconnection alone does not guarantee replay of every missed event. Verify whether the endpoint retains history and honors a resume cursor. A field named `seq` may be a service event sequence, a market queue sequence or a book sequence; they are not interchangeable.
+The snapshot endpoint returns a book and cursor together. The event endpoint accepts `from` or `lastEventId` for bounded backfill. Persist the cursor only after the application processes its event.
 
-## Optimistic and observed events
+The SDK opens one connection per subscription. It does not automatically reconnect. After disconnection, create another subscription with the saved cursor. If retained history cannot cover the gap, fetch a fresh snapshot.
 
-An optimistic fill is a model result. A chain fill is evidence that the matcher selected a trade in an included transaction. Confirmation level, subsequent reconciliation and event consumption still matter. Reconcile both identity and status so that a provisional fill followed by a chain fill is not counted twice.
+## Available subscriptions
 
-A correction should remove or replace stale optimistic orders and fills. It should not append the corrected result as if it were another trade. Accounting exports should use the appropriate chain-derived records.
+| Helper | Endpoint |
+| --- | --- |
+| `subscribeStateStream` | `/state/stream` |
+| `subscribeFrontendStream` | `/state/stream/frontend` |
+| `subscribeTradeStream` | `/state/stream/trades` |
+| `subscribeV2TradeStream` | `/v2/stream/trades` |
+| `subscribeMarketEvents` | `/v2/events/:market` |
+| `subscribeMarketFrontendStream` | `/v2/stream/frontend/:market` |
+| `snapshotAndStreamMarket` | `/v2/events/snapshot-and-stream/:market` |
+| `subscribeTicks` | Explicit `wsUrl`, such as `wss://v1.fermi.trade/ws/ticks` |
 
-## Stream acceleration
+`subscribeFrontendStream` requires at least one of `owner`, `fermiAccount`, or `market`. SSE helpers send `x-api-key`. `subscribeTicks` supplies the key through the `api_key` URL parameter. Do not expose authenticated URLs in logs.
 
-The optional LaserStream path can update exact queue accounts and program events more promptly than polling. RPC remains necessary for bootstrap, fallback and audits. The wrapper supports active/shadow modes and replay checkpoints. A faster source does not change on-chain validity or provide finality earlier.
+Subscriptions are async iterables with `close()`. They also accept an abort signal. HTTP 429 surfaces as `RateLimitedError`. The application manages backoff and reconnection.
 
-Monitor the last useful event and observed slot as well as connection liveness. A connected socket carrying stale state is not a healthy trading feed.
+## Reconcile state
 
+An optimistic fill is a local model result. A chain fill records an onchain match. Neither a stream cursor nor a queue sequence is a finality certificate.
 
-## Implementation reference
+Apply events idempotently. Reconcile provisional and chain events by identity and status, so the same fill does not count twice. Replace invalidated provisional state instead of adding a second economic result.
 
-Reviewed at `90267b20`. [continuum-state-harness.ts](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/scripts/execution-queue/continuum-state-harness.ts) · [harness-read-optimization.md](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/harness-read-optimization.md) · [continuumHarnessClient.ts](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/src/continuumHarnessClient.ts). Source links require access to the implementation repository.
+A Redis cursor, market queue sequence and transaction signature identify different objects. Preserve each in its own field. Monitor the last useful event and observed slot, not only socket liveness.
+
+## SDK reference
+
+Reviewed at `5318a579`. [src/streams.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/streams.ts) · [USAGE.md](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/USAGE.md).

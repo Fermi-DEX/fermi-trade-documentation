@@ -12,7 +12,7 @@
 | Head | Next queue sequence eligible for resolution. |
 | Harness / preplay | Local model that applies pending intents to chain-derived state and serves provisional results. |
 | Confirmed / finalized | Solana commitment levels. Neither means an unrelated optimistic prediction was correct. |
-| FermiAccount | Core account containing a trader's balances, positions and orders. Some SDK identifiers still say Mango. |
+| FermiAccount | Core account containing a trader's balances, positions and orders. The r9 SDK exposes Fermi account names. |
 | Bank | Token accounting and risk configuration, associated with token custody and deposit/borrow indexes. |
 | Oracle / stable price | External reference price / filtered reference used for conservative valuation. |
 | Health | Weighted account assets less liabilities under a specified risk model. |
@@ -44,4 +44,4 @@ A slot is a Solana scheduling unit, not a fixed-duration clock. Slot-based expir
 
 ## Implementation reference
 
-Reviewed at `90267b20`. [perp_market.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/perp_market.rs) · [math.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/math.rs). Source links require access to the implementation repository.
+Reviewed at `90267b20`. [perp_market.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [math.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/math.rs). Source links require access to the implementation repository.

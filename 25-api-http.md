@@ -1,42 +1,55 @@
-# HTTP reads and state views
+# HTTP state API
 
-The harness serves a read model built from chain observations and provisional replay. Its HTTP API is not an alternate settlement system. Every client should retain the response's view, freshness and source context alongside displayed data.
+Use `FermiV1StateClient` from the standalone SDK. The r9 gateway base URL is `https://v1.fermi.trade/prod`. Every request requires the gateway UUID as `x-api-key`.
 
-The service URL is deployment configuration. Internal example ports are not public endpoints or availability promises.
+```ts
+import { FermiV1StateClient } from '@fermilabs/fermi-v1-sdk';
 
-## Common read routes
+const state = new FermiV1StateClient({
+  gatewayUrl: 'https://v1.fermi.trade/prod',
+  apiKey: process.env.FERMI_API_KEY!,
+});
+const config = await state.getConfig();
+const market = await state.getMarketState(0, 'confirmed');
+const queue = await state.getQueueState(0);
+console.log(config, market, queue);
+```
 
-| Route | Purpose |
-| --- | --- |
-| `GET /state/markets` | Market list and metadata |
-| `GET /state/markets/:market` | Market state |
-| `GET /state/book/:market` | Book view |
-| `GET /state/queue/:market` | Queue state; `source=onchain` selects the chain-read path |
-| `GET /state/users/:owner` | User account view |
-| `GET /state/balances/:owner` | Balance/position view |
-| `GET /state/orders/:market` | Market orders with supported filters |
-| `GET /state/trades/:market` | Recent trade view |
-| `GET /state/full` | Full snapshot |
-| `GET /trace`, `GET /trace_full` | Intent and replay diagnostics |
-| `GET /healthz`, `GET /metrics` | Service health and metrics |
+## Read methods
 
-Routes, accepted market identifiers and query parameters must match the deployed wrapper. The server source is the wire-behavior reference; illustrative URLs here omit deployment-specific auth and filters.
+| SDK method | Route | Purpose |
+| --- | --- | --- |
+| `getConfig()` | `/config` | Deployment addresses, lot sizes and current fees |
+| `getBootstrap()` | `/state/bootstrap` | Bootstrap configuration |
+| `getMarkets(...)` | `/state/markets` | Multiple markets |
+| `getMarketState(market, view)` | `/state/markets/:market` | Market data |
+| `getMarketStateDetails(market, options)` | `/state/markets/:market` | Market response with its view envelope |
+| `getUserState(owner, view)` | `/state/users/:owner` | User state |
+| `getOrders({ market, owner, view })` | `/state/orders/:market` | Open orders |
+| `getQueueState(market)` | `/state/queue/:market` | Queue observations |
+| `getBalances(owner, view)` | `/state/balances/:owner` | Balances |
+| `queryTrades(...)`, `getTrades(...)` | `/state/trades`, `/state/trades/:market` | Trade history |
+| `getCandles(...)` | `/state/candles/:market` | Candle history |
+| `simulateWarm(...)`, `simulate(...)` | `/simulate/warm`, `/simulate` | Provisional trade simulation |
 
-## Read semantics
+Some helpers unwrap `data`. Preserve the requested view alongside the returned data. Use the detailed response where the application needs the envelope.
 
-The harness distinguishes confirmed, optimistic, optimistic-preplay and executable-now concepts. Support can vary by endpoint and backend. A chain-sourced request is still an observation at a commitment and slot, potentially cached or delayed; it does not mean finalized global state at the moment the browser renders it.
+## Views and freshness
 
-Use optimistic views for responsive interaction with visible status. Use chain-derived evidence for reconciliation, accounting and resolving ambiguous outcomes. During divergence, stale-data or provider incidents, show degraded status rather than silently treating a cached preview as authoritative.
+`optimistic` includes local replay of accepted intents over observed chain state. A later onchain failure can invalidate that preview. `confirmed` uses observed chain outcomes. It is not a promise of finalized state or zero cache delay.
 
-## Writes and administrative endpoints
+Several helpers default to `optimistic`. Pass `'confirmed'` explicitly for reconciliation. Preserve source, slot, timestamp and view fields where available. Show stale or divergent state as such.
 
-Relayer submission is a separate API. The HTTP bridge adapts requests into gRPC. Internal ingest and replay endpoints are service interfaces and need deployment access controls; they are not public instructions to mutate settled balances.
+## Gateway boundaries
 
-## FLP reads
+Normal order submission uses [gRPC](26-api-grpc.md). The SDK also exposes `submitRelayIntent` for the gateway HTTP bridge. Its availability depends on the service deployment.
 
-`/state/vaults/:vault`, `/state/vaults/:vault/portfolio` and `/state/vaults/:vault/users/:owner` expose vault and user views when the FLP reader is configured. These reads are chain-derived rather than optimistic AMQ settlement promises. Treat missing or unsupported accounting data as unavailable, not zero. See [FLP integration](35-flp-integration.md).
+Internal ingest, lane registration and replay endpoints are operator interfaces. Deprecated aliases in the SDK do not establish public gateway support. `/airdrop` is for enabled test deployments. It does not fund mainnet accounts, and `/airdrop-deposit` is retired.
 
+HTTP 429 produces `RateLimitedError`, with retry metadata when the server supplies it. Backoff and reconciliation remain application responsibilities.
 
-## Implementation reference
+The SDK has no typed FLP read methods at this revision. The [FLP integration page](35-flp-integration.md) distinguishes optional service routes from supported SDK exports.
 
-Reviewed at `90267b20`. [continuum-state-harness.ts](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/scripts/execution-queue/continuum-state-harness.ts) · [continuumHarnessClient.ts](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/src/continuumHarnessClient.ts) · [flp-metadata-api.md](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/docs/flp-metadata-api.md). Source links require access to the implementation repository.
+## SDK reference
+
+Reviewed at `5318a579`. [src/harness.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/harness.ts) · [src/auth.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/auth.ts) · [docs/api.md](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/docs/api.md).

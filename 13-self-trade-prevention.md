@@ -17,4 +17,4 @@ When submitted through the AMQ, a dispatch error also interacts with queue failu
 
 ## Implementation reference
 
-Reviewed at `90267b20`. [book.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/orderbook/book.rs) · [order.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/orderbook/order.rs). Source links require access to the implementation repository.
+Reviewed at `90267b20`. [book.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [order.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs). Source links require access to the implementation repository.

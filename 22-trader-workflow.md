@@ -1,39 +1,96 @@
-# Trader and market-maker workflow
+# Trader workflow
 
-A reliable client treats an order as a lifecycle with an identity. It does not equate HTTP success, relayer acceptance, transaction inclusion and a fill.
+An order has several distinct stages: signed intent, relayer acceptance, onchain queue resolution, matching, event consumption and settlement. A successful API call does not establish a fill.
 
-## Before signing
+## Submit through the SDK
 
-Load the program/group, market configuration, account state and current slot. Convert amounts to exact lots. Build the payload with explicit price, size, order type, self-trade behavior and timing. Build the canonical queued-perp account list, including the required health suffix. Sign the exact intent hash using the owner or authorized delegate.
+This Node.js example submits a real order. It assumes an existing funded r9 account, gateway key and relayer fee credit.
 
-Persist the signed request before sending it. Keep the payload, account metas, timing, client order ID and hash together; losing one field makes reconstruction and diagnosis harder.
+```ts
+import { randomBytes } from 'node:crypto';
+import {
+  createFermiV1Context,
+  FermiV1RelayerClient,
+  FermiV1StateClient,
+  PerpOrderSide,
+  PerpOrderType,
+  PerpSelfTradeBehavior,
+  submitPerpOrderViaRelayer,
+} from '@fermilabs/fermi-v1-sdk';
 
-## Track the result
+const apiKey = process.env.FERMI_API_KEY!;
+const context = await createFermiV1Context({
+  deployment: 'fermi-r9-mainnet',
+  clusterUrl: process.env.CLUSTER_URL,
+  apiKey,
+  userKeypair: process.env.USER_KEYPAIR!,
+  fermiAccountPk: process.env.FERMI_ACCOUNT_PK!,
+});
+const state = new FermiV1StateClient({
+  gatewayUrl: 'https://v1.fermi.trade/prod', apiKey,
+});
+const relayer = new FermiV1RelayerClient({
+  gatewayGrpcAddr: 'v1.fermi.trade:443', apiKey,
+});
+const clientOrderId = BigInt(`0x${randomBytes(8).toString('hex')}`);
+// Persist this ID and the intended action before submission.
+try {
+  const accepted = await submitPerpOrderViaRelayer(relayer, context, {
+    marketIndex: 0,
+    side: PerpOrderSide.bid,
+    price: 80,
+    quantity: 0.01,
+    clientOrderId,
+    orderType: PerpOrderType.postOnly,
+    selfTradeBehavior: PerpSelfTradeBehavior.decrementTake,
+    maxFeeLamports: 'AUTO',
+  });
+  console.log(accepted.sequence, accepted.tx_signature);
+  console.log(await state.getOrders({
+    market: 0, owner: context.user.publicKey, view: 'confirmed',
+  }));
+} finally {
+  relayer.close();
+}
+```
 
-| Stage | Evidence | What it establishes |
-| --- | --- | --- |
-| Submitted | Local request record | Client attempted delivery |
-| Accepted | Relayer response | Service admitted the request and assigned its identity |
-| Committed | Chain queue state / commit transaction | Hash was recorded at a sequence |
-| Executed or failed | Queue outcome plus transaction logs | Program resolved that item |
-| Filled / resting / canceled | Fill events and book/account state | Economic or order outcome |
-| Reconciled | Chain-derived state at a stated commitment/slot | Read model caught up to the observed result |
+The immediate read can precede execution. Continue reconciliation through queue state, orders, trades and chain transaction status. An absent open order can mean rejection, cancellation or a completed fill.
 
-Trigger orders use a separate withheld state until the keeper releases them. Their initial response need not contain a committed sequence.
+Price and quantity use UI units. The helper builds canonical account metas, converts to lots, signs the digest and submits through gRPC. Supported order types include `limit`, `ioc`, `postOnly`, `market`, and `postOnlySlide`.
 
-## Retry without inventing another trade
+Relayed timing defaults are `minExecuteSlot=0` and `expiresAtSlot=0`. These defaults do not provide permanent replay protection. The high-level helper returns the relayer response, not a durable copy of the signed request.
 
-After a timeout, query the known request/sequence and transaction status. Rebroadcasting identical signed Solana bytes keeps the same transaction identity; re-signing a new intent or changing its client order ID creates a different action. The bounded on-chain replay cache is insufficient as a permanent idempotency system.
+## Cancel an order
 
-If a signed transaction is still valid and its outcome is unknown, keep that uncertainty explicit. Do not assume a missing RPC response proves failure.
+These calls submit real cancellation intents. They reuse the context and an open relayer client from the placement example.
 
-## Market-making implications
+```ts
+import {
+  cancelPerpOrderByClientIdViaRelayer,
+  cancelAllPerpOrdersViaRelayer,
+} from '@fermilabs/fermi-v1-sdk';
 
-Cancel/replace actions compete in the same market sequence. A cancel cannot undo an earlier fill. Keep headroom for inventory, pending orders, fees and funding. Monitor both initial and maintenance health and include fills pending event consumption.
+await cancelPerpOrderByClientIdViaRelayer(relayer, context, {
+  marketIndex: 0,
+  clientOrderId,
+  maxFeeLamports: 'AUTO',
+});
+// Alternatively, cancel the account's orders in this market:
+await cancelAllPerpOrdersViaRelayer(relayer, context, { marketIndex: 0 });
+```
 
-For FLP, check the vault lifecycle and delegate state before quoting. A recovery or breaker can revoke the delegate while signed intents remain pending. On-chain reveal authorization determines whether those intents can still execute.
+Cancellation must reach execution before the competing fill to prevent it. Cancellation acceptance does not undo an earlier fill.
 
+## Recover from uncertainty
 
-## Implementation reference
+Persist the intended action, client order ID, market and returned sequence/signature. For durable signed-request storage, build with the exports in `src/intents.ts` and submit through `relayer.submitIntent`.
 
-Reviewed at `90267b20`. [executionQueue.ts](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/src/executionQueue.ts) · [ctm_sequencer.proto](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/scripts/execution-queue/ctm_sequencer.proto) · [v5_terminal.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/bin/service-mango-execution-engine/src/v5_terminal.rs). Source links require access to the implementation repository.
+After a timeout, reconcile the known identity before another submission. Calling the high-level helper again can create a new random ID. A new ID authorizes another action. Reusing an ID does not establish permanent idempotency because the onchain replay cache is bounded.
+
+Use optimistic state for responsive feedback with a visible status. Use chain-derived evidence for accounting and final reconciliation. HTTP 429 and gRPC `RESOURCE_EXHAUSTED` surface as `RateLimitedError`. Honor a supplied retry delay and apply backoff.
+
+The reviewed SDK does not expose trigger-order submission. The r9 direct-pool preset is unavailable. See [order types](12-order-types.md) and [direct submission](21-direct-fallback.md).
+
+## SDK reference
+
+Reviewed at `5318a579`. [src/trading.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/trading.ts) · [src/context.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/context.ts) · [src/relayerClient.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/relayerClient.ts) · [src/intents.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/intents.ts).

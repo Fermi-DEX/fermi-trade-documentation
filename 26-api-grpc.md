@@ -1,39 +1,43 @@
 # Relayer gRPC and signed intents
 
-The reviewed `ctmsequencer.CtmSequencerRelayer` service defines one RPC: `SubmitIntent`. Generate bindings from its protobuf. Methods such as `CancelIntent` are not part of this schema; cancellation is represented by the appropriate signed payload or a separate supported service path.
+Use `FermiV1RelayerClient` with `gatewayGrpcAddr: 'v1.fermi.trade:443'` and the gateway UUID as `apiKey`. The client uses TLS by default and sends `x-api-key` metadata. Call `close()` when the client is no longer needed.
 
-## Request groups
+The SDK's `proto/ctm_sequencer.proto` defines one RPC: `ctmsequencer.CtmSequencerRelayer.SubmitIntent`. Normal integrations use the [order and cancellation helpers](22-trader-workflow.md). Custom bindings must use this SDK schema.
+
+## Request fields
 
 | Fields | Meaning |
 | --- | --- |
-| `group`, `execution_queue`, `market` | Deployment and target accounts |
-| `payload`, `remaining_accounts` | Exact encoded operation and account metas |
-| `user_owner`, `mango_account`, `user_signature` | Intent signer, trading account and authorization |
-| `min_execute_slot`, `expires_at_slot` | Queue timing envelope |
-| `intent_version`, `target_kind`, `target_index` | Versioned routing and hash context |
-| `client_order_id` | Hash-bound identifier/randomizer; trigger orders use a specific terms commitment |
-| `base_fee`, `max_fee_lamports` | Service fee inputs; the cap is relayer-local |
-| `trigger_order` | Optional withheld stop/take-profit terms |
+| `group`, `execution_queue`, `market` | Deployment and target |
+| `payload`, `remaining_accounts` | Encoded operation and exact ordered account metas |
+| `user_owner`, `mango_account`, `user_signature` | Signer, Fermi account and signature |
+| `min_execute_slot`, `expires_at_slot` | Timing envelope |
+| `intent_version`, `target_kind`, `target_index` | Version and target context |
+| `client_order_id` | Hash-bound identifier |
+| `base_fee`, `max_fee_lamports` | Legacy fee alias and relayer-local fee cap |
 
-The historical field `user_owner` carries the intent signer; with enabled delegate support, it can be the current delegate. `mango_account` is the Fermi trading account. Preserve these wire names when generating clients.
+`mango_account` is an essential wire field in r9. Keep that spelling when constructing a raw request. Public SDK calls use `fermiAccount` or `fermiAccountPk`. The SDK performs the wire mapping.
 
-## Response semantics
+The client loader retains `uint64` values as strings. Do not convert sequences or IDs to imprecise JavaScript numbers. The helpers use intent version `2`, the canonical account list and the exact signed-message domain from [AMQ authorization](20-execution-queue.md).
 
-A normal response includes the assigned sequence, a transaction-signature field, message bytes and optional optimistic preplay JSON. `accepted_latency_ms` measures the relayer's admission/signing stage. `optimistic_processed_latency_ms` measures local preplay completion. Neither measures chain finality.
+## Response and lifecycle
 
-A trigger response instead supplies `trigger_order_id` and status while the request remains withheld. It has no committed trade sequence at that point.
+The SDK response has `sequence`, `tx_signature`, `user_intent_message`, `ctm_envelope_message`, `accepted_latency_ms`, and `optimistic_processed_latency_ms`.
 
-A transaction signature is a lookup key. Verify whether it represents a commit or later stage in the deployed path and inspect chain status; its presence is not proof of a fill.
+A returned sequence means admission, not execution or a fill. The transaction signature is a lookup key. Read its chain status and reconcile queue outcomes, orders and trades. Neither latency field measures chain finality.
 
-## What the service sees
+The SDK schema has no `trigger_order`, trigger status or optimistic preplay JSON field. Those fields in older service interfaces are not part of this client contract. There is no `CancelIntent` RPC. Cancellation uses an encoded signed cancellation payload through `SubmitIntent`.
 
-The schema sends payload bytes and account metas. The reviewed relayer parses the payload and constructs hashes locally. This interface does not itself specify an encrypted VDF-verification protocol. Transport encryption and POSq's proposed order-before-reveal construction are different matters; see [POSq](30-posq-sequencing.md).
+## Authorization and failures
 
-## Failure and retries
+The gateway key permits service access. The user's signature authorizes the economic action. A gateway key does not replace the signer or onchain account checks.
 
-Admission can fail on signature, version, account layout, timing, capacity, fees, local-state readiness or risk prechecks. Later execution can fail independently. Preserve the server's error details and the signed request identity. On an ambiguous timeout, reconcile before signing another economically equivalent request.
+The request transmits payload bytes and account metas. This schema does not define an encrypted VDF-verification protocol. See [POSq](30-posq-sequencing.md) for the distinction between the sequencing design and the reviewed execution path.
 
+Admission can fail before any chain transaction. Onchain execution can fail after acceptance. Preserve error details and request identity. After an ambiguous timeout, reconcile before creating a replacement intent.
 
-## Implementation reference
+`RESOURCE_EXHAUSTED` becomes `RateLimitedError`. Back off before another attempt. A fee rejection and an uncertain network outcome require different recovery decisions.
 
-Reviewed at `90267b20`. [ctm_sequencer.proto](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/scripts/execution-queue/ctm_sequencer.proto) · [main.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/bin/service-mango-execution-engine/src/main.rs) · [v5_precheck.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/bin/service-mango-execution-engine/src/v5_precheck.rs). Source links require access to the implementation repository.
+## SDK reference
+
+Reviewed at `5318a579`. [proto/ctm_sequencer.proto](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/proto/ctm_sequencer.proto) · [src/relayerClient.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/relayerClient.ts) · [src/trading.ts](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/src/trading.ts).

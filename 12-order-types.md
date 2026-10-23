@@ -25,11 +25,15 @@ The queue envelope uses slots: `min_execute_slot` and `expires_at_slot`. The ord
 
 The current gRPC schema supports `trigger_order` terms. These requests use intent version 3 and are withheld by the trigger-order keeper. The keeper submits the underlying intent when the configured oracle condition holds. The response has a trigger ID/status rather than an ordinary committed sequence.
 
-The trigger terms are committed through the client-order-ID construction; use the exact SDK encoding. Do not replace the identifier with an arbitrary random number for this path.
+The service trigger terms are committed through its client-order-ID construction. The current standalone SDK does not expose this encoding. Do not replace the identifier with an arbitrary random number for this path.
 
 Trigger observation and release are off chain. The later order executes on chain through normal checks. A stop is therefore not a guaranteed exit price, and one-cancels-other coordination is not an atomic on-chain guarantee that adverse execution is impossible.
 
 
+## SDK support boundary
+
+The current SDK exposes limit, IOC, post-only, market and post-only-slide placement through `submitPerpOrderViaRelayer`. Its protobuf has no trigger-order fields. The trigger mechanism described here is service implementation context, not an r9 SDK usage recipe.
+
 ## Implementation reference
 
-Reviewed at `90267b20`. [order.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/orderbook/order.rs) · [ctm_sequencer.proto](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/scripts/execution-queue/ctm_sequencer.proto) · [trigger_forward.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/bin/service-mango-execution-engine/src/trigger_forward.rs). Source links require access to the implementation repository.
+Protocol reviewed at `90267b20`; standalone SDK references at `5318a579`. [order.rs — programs source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/programs) · [ctm_sequencer.proto](https://github.com/Fermi-DEX/Fermi-v1-sdk/blob/5318a579dbb10ea34c182df9330a631a8aea2197/proto/ctm_sequencer.proto) · [trigger_forward.rs — bin source tree](https://github.com/Fermi-DEX/fermi-v1/tree/90267b20df99d0eacf35dbd407c67c33d809172b/bin). Source links require access to the implementation repository.
