@@ -1,247 +1,32 @@
-# 26 · WebSocket / Streams
+# Streams and reconciliation
 
-Fermi exposes streaming via **Server-Sent Events** (SSE) on both
-the harness and the fanout. There is no WebSocket server today; SSE
-gives equivalent semantics for one-way push streams and is simpler
-to operate.
+The harness exposes Server-Sent Events (SSE) for one-way updates. Common routes include `/state/stream`, `/state/stream/frontend` and `/state/stream/trades`. Downstream fanout or Redis-backed services can distribute those updates without making every client query the core harness.
 
-If you need WebSocket-style bidirectional streams (e.g. for `ping`/
-`pong` or dynamic subscription), wrap the SSE endpoints with your
-own client-side adapter or run a thin WS proxy on top.
+Solana RPC WebSocket subscriptions and optional LaserStream ingestion are upstream inputs. They are different from the client-facing SSE API.
 
-## Why SSE (and not WebSocket)?
+## Bootstrap a client
 
-- **HTTP semantics.** Caching, auth, gzip, HTTP/2 multiplexing all
-  work out of the box. Most CDNs proxy SSE without configuration.
-- **One-way is enough.** Trader streams are push-only; the client
-  doesn't need to send messages mid-stream.
-- **Built-in resumption.** Each event has a `seq` field; the client
-  reconnects with `?from=<last_seq>` and gets the missed events.
+1. Establish a snapshot and stream strategy supported by the deployed endpoint.
+2. Record snapshot slot/view and any stream cursor or event identity.
+3. Apply updates idempotently; an event can arrive again after reconnect or replay.
+4. Detect gaps, stale data and source changes.
+5. Fetch a fresh snapshot when continuity cannot be established.
 
-## Subscribing
+SSE reconnection alone does not guarantee replay of every missed event. Verify whether the endpoint retains history and honors a resume cursor. A field named `seq` may be a service event sequence, a market queue sequence or a book sequence; they are not interchangeable.
 
-### From a browser
+## Optimistic and observed events
 
-```js
-const url = `${HARNESS_URL}/stream/SOL-PERP?from=now`;
-const es  = new EventSource(url);
+An optimistic fill is a model result. A chain fill is evidence that the matcher selected a trade in an included transaction. Confirmation level, subsequent reconciliation and event consumption still matter. Reconcile both identity and status so that a provisional fill followed by a chain fill is not counted twice.
 
-es.addEventListener('FillLogV3', (e) => {
-  const fill = JSON.parse(e.data);
-  if (fill.taker === MY_PUBKEY) {
-    // ...
-  }
-});
+A correction should remove or replace stale optimistic orders and fills. It should not append the corrected result as if it were another trade. Accounting exports should use the appropriate chain-derived records.
 
-es.addEventListener('PerpUpdateFundingLogV2', (e) => {
-  const f = JSON.parse(e.data);
-  console.log('funding', f.instantaneous_funding_rate);
-});
+## Stream acceleration
 
-es.onerror = () => {
-  console.warn('SSE disconnected; browser will auto-reconnect');
-};
-```
+The optional LaserStream path can update exact queue accounts and program events more promptly than polling. RPC remains necessary for bootstrap, fallback and audits. The wrapper supports active/shadow modes and replay checkpoints. A faster source does not change on-chain validity or provide finality earlier.
 
-### From Node
+Monitor the last useful event and observed slot as well as connection liveness. A connected socket carrying stale state is not a healthy trading feed.
 
-```ts
-import { EventSource } from 'eventsource';
 
-const es = new EventSource(`${HARNESS_URL}/stream/SOL-PERP?from=now`, {
-  headers: { Authorization: `Bearer ${TOKEN}` }, // for fanout
-});
+## Implementation reference
 
-es.addEventListener('FillLogV3', (e) => { ... });
-```
-
-### From Rust (via `reqwest` + `eventsource-stream`)
-
-```rust
-let resp = reqwest::Client::new()
-    .get(format!("{}/stream/{}", HARNESS_URL, "SOL-PERP"))
-    .send().await?;
-let mut stream = resp.bytes_stream().eventsource();
-while let Some(event) = stream.next().await {
-    match event?.event.as_str() {
-        "FillLogV3" => { ... }
-        _ => {}
-    }
-}
-```
-
-## Streams catalog
-
-| Path | Per-event types | Useful for |
-|---|---|---|
-| `/stream/{market}` | `FillLogV3`, `PerpUpdateFundingLogV2`, `PerpTakerTradeLog`, `PerpMakerTradeLog`, `BookSideUpdate`, `OutEvent`, `queue_state` | Per-market firehose. UIs, market data archivers. |
-| `/stream/account/{authority}` | Same event types but filtered to events touching this authority's accounts | Per-trader UI dashboards. |
-| `/stream/oracles` | `OracleUpdate` | Oracle watchers / pricing services. |
-| `/stream/queue/{market}` | `queue_state`, `QueueItemEnqueued`, `QueueItemProcessed` | Relayer / executor health monitoring. |
-
-## Event reference
-
-Every event carries a top-level `seq` (monotonic per stream),
-`slot` (Solana slot), and `ts` (server timestamp). The body
-varies.
-
-### `FillLogV3`
-
-```json
-{
-  "market_index": 0,
-  "taker_side": "Bid",
-  "maker": "...pubkey...",
-  "taker": "...pubkey...",
-  "maker_slot": 3,
-  "maker_client_order_id": 42,
-  "taker_client_order_id": 1042,
-  "maker_fee": "-0.0002",
-  "taker_fee": "0.0004",
-  "price": "150.4",
-  "quantity": "1",
-  "timestamp": 1715810000,
-  "seq_num": 12345,
-  "maker_timestamp": 1715809980,
-  "maker_out": false
-}
-```
-
-`maker_out: true` indicates this fill consumed the maker order
-completely (the leaf was removed and the slot will be freed on
-`consume_events`).
-
-### `OutEvent`
-
-```json
-{
-  "owner": "...",
-  "owner_slot": 2,
-  "quantity": "0.5",
-  "reason": "expired" | "cancelled" | "evicted" | "self_trade_cancel_provide"
-}
-```
-
-### `PerpUpdateFundingLogV2`
-
-```json
-{
-  "market_index": 0,
-  "long_funding": "...",
-  "short_funding": "...",
-  "price": "150.42",
-  "stable_price": "150.20",
-  "open_interest": 12345,
-  "instantaneous_funding_rate": "0.000028",
-  "fees_accrued": "...",
-  "fees_settled": "..."
-}
-```
-
-### `PerpTakerTradeLog` / `PerpMakerTradeLog`
-
-Aggregated per-tx receipts grouped by side. Includes cumulative
-quote_filled, base_filled, fees, and the resulting account state.
-
-### `BookSideUpdate` (delta)
-
-A compact diff of orders added / removed since the last update for
-this side.
-
-```json
-{
-  "market_index": 0,
-  "side": "Bid",
-  "tree": "Fixed",
-  "added":  [{"id":"...","price":"150.5","quantity":"1.0","owner":"..."}],
-  "removed":[{"id":"..."}]
-}
-```
-
-For full snapshots use `GET /state/book/{market}`; the delta stream
-is meant to be combined with one initial snapshot.
-
-### `OracleUpdate`
-
-```json
-{
-  "oracle":  "...pubkey...",
-  "kind":    "Pyth",
-  "price":   "150.42",
-  "confidence": "0.05",
-  "last_update_slot": 24123450
-}
-```
-
-### `queue_state`
-
-```json
-{
-  "market_index": 0,
-  "head": 12350,
-  "max_seen": 12352,
-  "live_count": 2,
-  "first_failure_slot": 0,
-  "gap_observed_slot": 0
-}
-```
-
-Emitted when any of `head`, `max_seen`, `live_count`, or the
-failure/gap markers change.
-
-### `QueueItemEnqueued`
-
-A new commit landed in the queue. Indicates the start of an
-intent's lifecycle.
-
-```json
-{
-  "market_index": 0,
-  "sequence": 12353,
-  "commit_hash_hex": "...",
-  "ingress_slot": 24123455,
-  "expires_at_slot": 24123555
-}
-```
-
-### `QueueItemProcessed`
-
-Terminal status for an intent — executed, failed, or autodropped.
-
-```json
-{
-  "market_index": 0,
-  "sequence": 12345,
-  "status": "Executed" | "Failed",
-  "failure_code": 0,                  // see error code table in [20]
-  "tx_signature": "...",
-  "completed_slot": 24123460
-}
-```
-
-## Reconnection / resume
-
-- The `seq` field on every event is the canonical resumption cursor.
-- On reconnect, request `?from=<last_seen_seq + 1>`. The harness
-  serves backfill from its in-memory ring (last ~10 000 events per
-  stream) plus a disk-backed log for older events.
-- If `from` is older than the ring's tail, you'll get a single
-  `gap` event indicating you missed events; do a full state
-  resync via `GET /state/...` and resubscribe with `from=now`.
-
-## Throughput / sizing
-
-Per-market stream rates (rough, observed at peak):
-
-- `FillLogV3`: bursts to ~50/s during fast markets.
-- `BookSideUpdate`: hundreds/s during HFT-dominated periods.
-- `PerpUpdateFundingLogV2`: every few seconds (keeper cadence).
-
-Plan accordingly: a UI rendering 100 fills/s straight to DOM is
-going to lag. Batch by frame (~16 ms) before applying.
-
-## Closing the stream
-
-Standard SSE: close the `EventSource` (browser) or drop the
-response stream (Node / Rust). The fanout limits per-key concurrent
-streams (default 16) — close ones you no longer need.
+Reviewed at `90267b20`. [continuum-state-harness.ts](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/scripts/execution-queue/continuum-state-harness.ts) · [harness-read-optimization.md](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/harness-read-optimization.md) · [continuumHarnessClient.ts](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/src/continuumHarnessClient.ts). Source links require access to the implementation repository.

@@ -1,295 +1,69 @@
-# 19 · Execution Queue v5
+# The v5 execution queue: on-chain AMQ
 
-The execution queue (the "v5 queue") is the on-chain AMQ-style state
-machine that enforces the [POSq-produced order](30-posq-sequencing.md)
-before intents touch the order book. Every order placed via the fast
-path goes through it.
+The v5 AMQ is a per-market state machine that stores a sequence of commitments and resolves them from the head. It fixes the execution order of admitted items without moving matching or margin enforcement off chain.
 
-Goals it solves:
+## What the program stores
 
-1. **On-chain FIFO through AMQs.** Same-market intents execute in the
-   exact order committed from the POSq sequence; a validator that tries
-   to reorder breaks the commit hash and the tx fails.
-2. **Account-substitution resistance.** The account list is part of
-   the user-signed intent; a relayer that swaps accounts after
-   signing is detected at reveal.
-3. **Replay protection.** Once an intent hash is consumed it cannot
-   be re-submitted for `~10` slots / `512` entries.
-4. **Censorship fallback.** A direct-submit pool lets users get
-   intents on chain without relayer cooperation.
-5. **Liveness under failure.** Expired or stalled intents can be
-   skipped so a single bad reveal doesn't wedge the market.
+The queue PDA uses `execution-queue-v5`, group and the little-endian market index. The reviewed layout version is 7. Each account has one market subqueue and a 1,024-slot ring. A slot stores the sequence, commitment hash, timing bounds, ingress slot, failure/retry metadata and status. CTM payload bytes and their full account lists arrive at reveal.
 
-## Architecture
+The program distinguishes an unused slot from the same physical ring position used for another sequence. Admission checks the head-relative window and capacity; modulo indexing is not permission to overwrite live work.
 
-There is **one `ExecutionQueueV5` account per perp market**. The
-PDA is seeded by `[group, "ExecutionQueueV5", market_index]`. Total
-size is ~394 KB including a 1024-slot per-market ring, a sub-queue
-header, and a 512-entry replay cache.
+| Constant in reviewed source | Value |
+| --- | --- |
+| Commit batch cap | 64 entries |
+| Reveal batch cap | 32 entries |
+| Queue capacity | 1,024 items per market |
+| Replay cache | 512 consumed hashes |
+| Replay retention | 20 slots, also bounded by cache capacity |
+| Default gap wait | 4 slots |
+| Default retries / configured cap | 3 / 20 |
+| Maximum admission-relative delay | 2,400 slots |
+| Maximum nonzero expiry horizon | 5,400 slots |
 
-```
-ExecutionQueueV5
-├── header                ExecutionQueueV5Header
-├── sub_queue_headers[1]  SubQueueHeaderV5   (one per bound market)
-├── items[1024]           CommitItemV5       (per-market ring of pending intents)
-└── replay_cache[512]     ReplayEntryV5      (consumed intent hashes for replay protection)
-```
+Transaction size, compute, account locks and configuration can impose lower practical limits.
 
-*Source: `state/execution_queue_v5.rs:302-310`.*
+## Commit authorization
 
-## AMQs: the on-chain FIFO primitive
+The CTM authority signs a message under `mango-v4-commit-batch-v1`. It binds group, market, shard, first sequence and each entry's hash and timing. The program verifies the Ed25519 preinstruction and writes consecutive entries. The current shard ID must be zero.
 
-ExecutionQueueV5 follows the **Asynchronous Market Queue (AMQ)** pattern:
-market actions are not executed immediately when they enter the program.
-They are first queued in program state with explicit ordering metadata,
-then a later crank/reveal instruction executes them in the order chosen
-by the application.
+A user intent uses the domain `mango-v5-user-intent-v2`, despite the helper name `canonical_user_intent_message_v3`. It binds:
 
-The AMQ pattern was described by Temporal as a way for Solana programs
-to implement application-controlled execution without changing the
-Solana protocol: a program can accept asynchronous instructions, store
-them in its own queue, tag them with ordering metadata such as slot,
-priority, or sequence, and process them later in program-defined order.
-See Temporal's write-up:
-[Application Controlled Execution through Asynchronous Market Queues](https://www.temporal.xyz/writings/application-controlled-execution-ace-through-asynchronous-market-queues-amqs).
+- group, FermiAccount and intent signer;
+- kind, target kind and market index;
+- payload hash and canonical account-meta hash;
+- minimum execution slot, expiry slot and client order ID.
 
-Fermi uses that primitive with a deliberately simple policy:
+The **user hash does not contain the assigned queue sequence**. The CTM batch binds a commitment to a sequence. This is the boundary between user authorization and sequencer assignment.
 
-- **one queue per market;**
-- **one monotonic sequence per market;**
-- **one committed hash per sequence;**
-- **strict head advancement by one sequence at a time.**
+The account hash includes order and effective signer/writable flags, not just pubkeys. Solana can merge privileges for duplicate accounts across a transaction. Use the canonical builder and a distinct relayer fee payer; making the user signer the fee payer can change flags and break the commitment.
 
-That is what turns FIFO from a relayer promise into on-chain behavior.
-POSq determines the auditable market sequence, and the AMQ-style queue
-forces the on-chain program to consume that sequence deterministically.
+## Reveal at the head
 
-### `SubQueueHeaderV5` (64 bytes)
+The executor supplies reveal records and their account slices. The program checks queue pauses, head state and timing, reconstructs the commitment, validates payload and market/account shape, checks the required user signature and current owner/delegate authorization, applies the duplicate guard, and dispatches the action.
 
-Holds the head pointer and ring-buffer state for one market:
+Place-containing payloads use the health-region checks. The program, not the preview, chooses fills and validates the result.
 
-| Field | Purpose |
-|---|---|
-| `market_index` | which `PerpMarket` this sub-queue is bound to |
-| `active` | bound flag |
-| `paused_ingress`, `paused_execute` | per-market kill switches |
-| `live_count` | number of pending items in this market's ring |
-| `gap_wait_slots` | how many slots to wait before skipping a gap (default 4) |
-| `soft_limit` | optional admission cap (0 = full ring capacity) |
-| `next_sequence_to_execute` | **the head** — next seq the executor must process |
-| `max_seen_sequence` | highest seq ever committed |
-| `gap_observed_slot` | slot at which a gap was first observed |
-| `first_failure_slot` | slot at which the head first failed |
+A higher-sequence payload cannot stand in for the head: its hash will not match that commitment. A validator can delay inclusion or reorder reveal transactions, but the program still reads its own current head.
 
-### `CommitItemV5` (96 bytes per item)
+## Resolution and failure
 
-One slot in the ring:
+A head can execute, expire, fail terminal validation, exhaust an applicable retry budget, or be removed through authorized recovery. Missing heads have a bounded gap-wait mechanism when later sequences are known. A gap skip emits an outcome; it does not prove that a never-landed request traded.
 
-| Field | Purpose |
-|---|---|
-| `sequence` | per-market monotonic order index |
-| `min_execute_slot` | earliest slot at which this intent may execute |
-| `expires_at_slot` | latest slot; past it, intent is auto-failed |
-| `ingress_slot` | slot at which the commit landed |
-| `first_failure_slot` | first slot the reveal failed (for retries / autodrop) |
-| `commit_hash` | SHA-256 of the canonical signed-payload-plus-accounts |
-| `status` | `Empty(0)`, `Committed(1)`, `Revealed(2)`, `Failed(3)` |
-| `retries` | execution-attempt counter |
-| `flags` | reserved |
+Error behavior depends on where failure occurs. A returned transaction error rolls back the transaction. Some validated-item failures are recorded and clear the head in a successful transaction. In a reveal batch, a first commitment mismatch errors; a later mismatch can stop the batch while preserving earlier resolved items. Never map transaction success directly to “all items filled.”
 
-### `ReplayEntryV5` (40 bytes per entry)
+Admin head-drop and reasoned reclaim require execution pause. These paths are explicit exceptions to normal head execution and must be monitored as such.
 
-The replay cache stores recently consumed intent hashes:
+## Replay is bounded
 
-| Field | Purpose |
-|---|---|
-| `intent_hash` | SHA-256 of the canonical user intent (without sequence) |
-| `consumed_slot` | slot at which this hash was committed |
+The cache rejects recently consumed identical hashes. It is not a permanent nonce ledger: age and finite capacity limit retention. CTM intents can use zero expiry. The relayer therefore remains responsible for broader duplicate-admission discipline, and clients must reconcile ambiguous submissions before creating replacements.
 
-Entries older than `~10` slots are overwritten in the ring; the
-cache is large enough that any real replay attempt within that
-window is detected.
+Random client order IDs reduce accidental collisions and help conceal predictable commitment preimages. They do not make a valid signature permanently non-replayable. Direct submissions have additional expiry requirements, but clients must still account for the cache horizon and capacity.
 
-## The lifecycle of one intent
+## What FIFO does not establish
 
-```
-USER SIGNS INTENT
-  ↓
-[off-chain]  POSq/relayer validates: signature, accounts, health
-  ↓
-COMMIT      relayer writes POSq-ordered CommitItemV5 with status=Committed
-             into ring[sequence % 1024]; entry visible on chain.
-  ↓
-REVEAL +    executor submits full payload; on-chain program:
-EXECUTE      ├─ recomputes payload hash, compares to commit_hash
-             ├─ verifies user Ed25519 signature
-             ├─ checks replay_cache; aborts if intent already consumed
-             ├─ dispatches to handler (e.g. perp_place_order)
-             ├─ on success → clear head, advance next_sequence_to_execute
-             └─ on terminal failure (expired, hash mismatch, signature bad)
-                 → clear head, status=Failed, advance head
-                 on transient failure (health, oracle stale)
-                 → increment retries; head stays
-  ↓
-[off-chain] stalls past min_execute_slot+grace → autodrop calls
-            execution_queue_v5_reclaim_seq_market(reason=...)
-```
+The queue does not prove first network arrival, verify a VDF, guarantee reveal availability, or order all direct maintenance instructions. It enforces market-local committed order subject to its resolution rules. See [POSq](30-posq-sequencing.md) for the sequencing design and [security](37-security-and-invariants.md) for the deployment assumptions.
 
-## Sequence assignment
 
-Sequences are assigned by POSq/relayer at commit time and validated on
-chain (`state/execution_queue_v5.rs:221-227, 239-252`):
+## Implementation reference
 
-```rust
-pub fn next_enqueue_sequence(&self) -> u64 {
-    if self.live_count == 0 {
-        self.next_sequence_to_execute
-    } else {
-        self.max_seen_sequence.saturating_add(1)
-    }
-}
-
-pub fn validate_commit_sequence(&self, sequence: u64) -> Result<()> {
-    require!(sequence >= self.next_sequence_to_execute,
-             FermiError::InvalidSequenceNumber);
-    require!(sequence < self.next_sequence_to_execute
-                            .saturating_add(self.admission_limit()),
-             FermiError::ExecutionQueueFull);
-    Ok(())
-}
-```
-
-So the fast path can never commit:
-
-- A sequence that's already been executed (`< head`), or
-- A sequence further than `admission_limit` (= 1024 default) past
-  the head.
-
-This bounds the ring usage and prevents wrap-around.
-
-## Head advance
-
-The head only advances by `1` per successful execution or admin drop
-(`state/execution_queue_v5.rs:407-422, 261-264`):
-
-```rust
-pub fn clear_head(&mut self, sub_queue_idx: usize) -> Result<u64> {
-    // require live_count > 0; zero the head slot; bump pointer
-    self.items[phys] = CommitItemV5::default();
-    self.sub_queue_headers[sub_queue_idx].note_head_advanced();
-    Ok(seq)
-}
-
-pub fn note_head_advanced(&mut self) {
-    self.live_count = self.live_count.saturating_sub(1);
-    self.next_sequence_to_execute += 1;
-}
-```
-
-No batch advance, no gap skipping (except via the explicit gap-
-wait mechanism below). Strict FIFO.
-
-This is also what makes optimistic pre-play possible. Once a sequence is
-committed, every observer can replay the same queue head, payload,
-account list, oracle state, and matching logic. A venue whose ordering
-can still change after the preview cannot offer the same deterministic
-pre-confirmation; Fermi can because the queue makes the execution path
-fixed before the reveal is processed.
-
-## Gaps
-
-A gap exists when `next_sequence_to_execute` points at a slot whose
-status is `Empty` — i.e. the relayer committed `seq=10` and
-`seq=12` but `seq=11` was lost. The on-chain program tracks the
-first slot at which the gap was observed (`gap_observed_slot`).
-
-If `current_slot - gap_observed_slot > gap_wait_slots` (default 4),
-the executor is allowed to call
-`execution_queue_v5_reclaim_seq_market(reason=GapTimeout)` to
-advance past the missing slot. This trade is: brief stalls preferred
-over indefinite wedging.
-
-In practice the relayer should not intentionally commit sparse — gaps
-arise from RPC failures, lost commits, or other operational faults. The
-autodrop service handles them automatically, and the POSq/commit trail
-is the audit surface for unexplained gaps.
-
-## Replay protection
-
-On reveal, before dispatch:
-
-```rust
-let intent_hash = sha256(canonical_user_intent_message_v2(payload, accounts));
-
-for entry in replay_cache {
-    if entry.intent_hash == intent_hash &&
-       current_slot - entry.consumed_slot < replay_window_slots {
-        return Err(ExecutionQueueV5IntentReplay);
-    }
-}
-
-// after successful dispatch:
-replay_cache[replay_write_cursor] = ReplayEntryV5 {
-    intent_hash, consumed_slot: current_slot,
-};
-replay_write_cursor = (replay_write_cursor + 1) % 512;
-```
-
-So even if a malicious fast-path operator kept your signed payload and tried to
-re-submit it, the second commit-reveal would hit the cache and
-fail.
-
-## Instruction summary
-
-| Instruction | Description |
-|---|---|
-| `execution_queue_v5_commit_market` | Relayer commits a batch of up to 64 hashes. |
-| `execution_queue_v5_enqueue_direct_market` | User submits intent directly (no relayer); staged in direct pool. |
-| `execution_queue_v5_reveal_execute_market` | Executor reveals payload, verifies, dispatches. |
-| `execution_queue_v5_execute_market` | Multi-lane executor (multiple candidate account sets). |
-| `execution_queue_v5_drop_head_market` | Admin-only: drops current head (requires `paused_execute`). |
-| `execution_queue_v5_reclaim_seq_market` | Admin: drops a specific sequence with a reason (Expired, LostRevealMaterial, RetryExhausted, GapTimeout, …). |
-
-An earlier-generation `ExecutionQueueEnqueueCtm` instruction is
-rejected with `Custom(6126) LegacyQueuesDisabled` — only v5 queue
-instructions are accepted on the live program.
-
-## Error codes you'll see
-
-| Code | Name | Cause |
-|---|---|---|
-| `6076` | `ExecutionQueueFull` | Sequence past `next_sequence_to_execute + 1024`. |
-| `6126` | `LegacyQueuesDisabled` | Trying to use an earlier-generation enqueue path; use the v5 queue. |
-| `6127` | `ExecutionQueueSubQueueMarketIndexMismatch` | Item's `market_index` doesn't match the claimed market — account substitution detected. |
-| `6128` | `ExecutionQueueSequenceNotPending` | Sequence is not `Committed`/`Pending`; already executed or cleared. |
-| `6129` | `ExecutionQueueEmpty` | No pending items. |
-| `6130` | `ExecutionQueueV5IntentReplay` | Intent hash already in `replay_cache`. |
-| `6131` | `InvalidSequenceNumber` | Sequence `< head` or `≥ head + admission_limit`. |
-| `6132` | `ExecutionQueueIngressPaused` | Market or global ingress paused. |
-| `6133` | `ExecutionQueueExecutePaused` | Market or global execute paused. |
-| `6134` | `ExecutionQueueEnvelopeExpired` | `expires_at_slot` already in the past at commit time. |
-| `6135` | `ExecutionQueuePayloadHashMismatch` | Provided payload doesn't hash to commit hash. |
-| `6136` | `ExecutionQueueAccountsHashMismatch` | Provided account list doesn't hash to commit hash. |
-
-## Tracing an intent
-
-Given `(market, sequence)` you can query the optimistic harness:
-
-```
-GET /trace/sequence/{market}/{seq}
-```
-
-It returns every emission point seen for that sequence:
-
-- `relay_intent_status status=accepted|rejected`
-- `v5_commit_debug seq=... commit_hash_hex=...`
-- `relay_intent_status status=submitted` (with `tx_signature`) or
-  `status=rejected`
-- `v5_reveal_debug first_seq=... last_seq=...`
-- Reveal tx outcome from on-chain logs
-- `v5_autodrop` for admin drops
-- `v5_reveal queue state head=... last_fired=...`
-
-If any stage is missing, the trace explicitly says so. This is the
-canonical debugging surface — see `fermi-v1/CLAUDE.md` for the
-audit-trail invariant.
+Reviewed at `90267b20`. [execution_queue_v5.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/execution_queue_v5.rs) · [execution_queue_v5.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/instructions/execution_queue_v5.rs) · [execution_queue.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/instructions/execution_queue.rs) · [execution_queue_v5.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/accounts_ix/execution_queue_v5.rs). Source links require access to the implementation repository.

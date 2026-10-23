@@ -1,209 +1,39 @@
-# 21 · Trader Workflow
+# Trader and market-maker workflow
 
-End-to-end recipe for a programmatic trader on Fermi. The same flow
-applies to a UI; both rely on the same SDK and read/write surfaces.
+A reliable client treats an order as a lifecycle with an identity. It does not equate HTTP success, relayer acceptance, transaction inclusion and a fill.
 
-## Required state on the trader side
+## Before signing
 
-A working bot keeps:
+Load the program/group, market configuration, account state and current slot. Convert amounts to exact lots. Build the payload with explicit price, size, order type, self-trade behavior and timing. Build the canonical queued-perp account list, including the required health suffix. Sign the exact intent hash using the owner or authorized delegate.
 
-| State | Source | Refresh cadence |
-|---|---|---|
-| Group config (banks, perps, oracles) | Optimistic harness `GET /config` | Once at startup; on a config-bump event |
-| Account state | Optimistic harness `GET /state/users/:owner` or direct RPC | On every fill / cancel / settlement |
-| Orderbook | Optimistic harness `GET /state/book/:market` + SSE deltas | Continuous via SSE |
-| Oracle prices | Optimistic harness `GET /state/oracles` or direct RPC | Per-slot or on Pyth update |
-| Liquidation candidates (if you're a liqor) | Optimistic harness `/state/users` index | Continuous polling |
-| Your unfilled intents | Local state | Locally; reconcile from harness `/trace` periodically |
+Persist the signed request before sending it. Keep the payload, account metas, timing, client order ID and hash together; losing one field makes reconstruction and diagnosis harder.
 
-## The order placement loop
+## Track the result
 
-```
-loop:
-  1. Decide an order — side, price, size, type — using your strategy.
-  2. Build a v5 intent off-chain using the SDK.
-  3. Sign the canonical message with your authority (or delegate) key.
-  4. Submit to the relayer via gRPC SubmitIntent.
-  5. Receive (sequence, tx_signature) immediately.
-  6. Subscribe / await your client_order_id in the fanout fill stream.
-  7. On fill: update your local position, mark client_order_id done.
-  8. On no fill within TIF: order auto-expired; you'll see an OutEvent.
-  9. On error: see the error code in the trace and handle.
-```
+| Stage | Evidence | What it establishes |
+| --- | --- | --- |
+| Submitted | Local request record | Client attempted delivery |
+| Accepted | Relayer response | Service admitted the request and assigned its identity |
+| Committed | Chain queue state / commit transaction | Hash was recorded at a sequence |
+| Executed or failed | Queue outcome plus transaction logs | Program resolved that item |
+| Filled / resting / canceled | Fill events and book/account state | Economic or order outcome |
+| Reconciled | Chain-derived state at a stated commitment/slot | Read model caught up to the observed result |
 
-## Step-by-step with TypeScript
+Trigger orders use a separate withheld state until the keeper releases them. Their initial response need not contain a committed sequence.
 
-### 1. Connect
+## Retry without inventing another trade
 
-```ts
-import { FermiClient, FERMI_V1_ID } from '@fermi/client';
-import { Connection, Keypair } from '@solana/web3.js';
+After a timeout, query the known request/sequence and transaction status. Rebroadcasting identical signed Solana bytes keeps the same transaction identity; re-signing a new intent or changing its client order ID creates a different action. The bounded on-chain replay cache is insufficient as a permanent idempotency system.
 
-const connection = new Connection(RPC_URL, 'confirmed');
-const owner      = Keypair.fromSecretFile('owner.json');
-const client     = await FermiClient.connect(connection, FERMI_V1_ID);
+If a signed transaction is still valid and its outcome is unknown, keep that uncertainty explicit. Do not assume a missing RPC response proves failure.
 
-const group        = await client.getGroup(GROUP_PUBKEY);
-const fermiAccount = await client.getFermiAccountForOwner(group, owner.publicKey, 0);
-```
+## Market-making implications
 
-### 2. Read state
+Cancel/replace actions compete in the same market sequence. A cancel cannot undo an earlier fill. Keep headroom for inventory, pending orders, fees and funding. Monitor both initial and maintenance health and include fills pending event consumption.
 
-```ts
-await fermiAccount.reload(client);
+For FLP, check the vault lifecycle and delegate state before quoting. A recovery or breaker can revoke the delegate while signed intents remain pending. On-chain reveal authorization determines whether those intents can still execute.
 
-const perp     = group.getPerpMarketByName('SOL-PERP');
-const oracle   = await perp.oraclePrice(connection);
-const book     = await client.getOrderbook(perp);          // bids + asks merge
-const initHp   = await client.computeAccountHealth(group, fermiAccount, 'init');
-```
 
-You can also point the SDK at the optimistic harness instead of
-direct RPC reads — it's faster and gives you optimistic state.
+## Implementation reference
 
-```ts
-const harness = client.useOptimisticHarness(HARNESS_URL);
-const book    = await harness.getBook('SOL-PERP');
-const state   = await harness.getUserState(owner.publicKey);
-```
-
-### 3. Build and sign an intent
-
-```ts
-const order = {
-  side: 'bid',
-  priceLots: perp.uiPriceToLots(150.5),
-  maxBaseLots: perp.uiBaseToLots(2),
-  clientOrderId: 1042n,
-  reduceOnly: false,
-  timeInForceSeconds: 60,
-  selfTradeBehavior: 'cancel_provide',
-  params: { type: 'fixed', orderType: 'limit' },
-};
-
-const intent = await client.buildPerpPlaceOrderIntent(fermiAccount, perp, order);
-const signed = await intent.signWith(owner);   // or delegateKeypair
-```
-
-The signed intent contains the **canonical user-intent message**,
-the user's Ed25519 signature, and the full account list. The
-signature binds both payload and accounts; any post-signing
-substitution is caught on chain.
-
-### 4. Submit
-
-```ts
-const relayer    = await client.connectRelayer(RELAYER_URL);
-const submission = await relayer.submitIntent(signed);
-
-console.log('sequence:', submission.sequence,
-            'commit tx:', submission.txSignature);
-```
-
-The relayer returns:
-
-- `sequence` — your slot in the per-market FIFO.
-- `txSignature` — the commit transaction signature (look up on a
-  block explorer).
-- `acceptedSlot` — the slot the relayer admitted you.
-- `expiresAtSlot` — when the intent will be auto-failed if not
-  revealed.
-
-### 5. Watch for fills
-
-```ts
-const stream = harness.subscribeFills(perp, { fromSeq: 'now' });
-for await (const fill of stream) {
-  if (fill.taker_client_order_id === 1042n) {
-    console.log('Filled', fill.quantity, '@', fill.price, 'fee', fill.taker_fee);
-    break;
-  }
-}
-```
-
-Or by `taker` pubkey, or by `maker` pubkey if you're the maker side.
-
-### 6. Handle errors
-
-If the relayer's `SubmitIntent` returns an error, it's one of:
-
-- `INVALID_SIGNATURE` — the signature doesn't match the canonical
-  message. Re-sign with the correct authority.
-- `STALE_ACCOUNT` — your local view of the account is older than
-  the on-chain state. Reload and rebuild.
-- `ORACLE_STALE` — the oracle is past its freshness window. Wait
-  or push a Pyth update yourself.
-- `HEALTH_PRECHECK_FAILED` — the order would put you into
-  negative init health. Adjust size / price / collateral.
-- `MARKET_REDUCE_ONLY` — the market is reduce-only and your order
-  increases exposure.
-
-If the *on-chain* dispatch fails after the relayer accepted, the
-`/trace/sequence/{market}/{seq}` endpoint exposes the program error
-code. Common ones:
-
-- `MaintenanceHealthBelowZero` — your maint health was already
-  negative when the order revealed; the fix is to deposit more
-  collateral, then resubmit.
-- `WouldSelfTrade` — `AbortTransaction` SLT triggered.
-- `ExecutionQueueV5IntentReplay` — you re-submitted a previously
-  consumed intent within the replay window.
-
-## Cancellation
-
-```ts
-await client.perpCancelOrderByClientOrderId(group, fermiAccount, perp, 1042n);
-```
-
-This goes through the relayer like any other intent. It's a
-separate intent type with its own commit/reveal, so it has a tiny
-latency delay. If you need a *synchronous* cancel for a closing
-flow, use the direct path or call `perp_cancel_order` via Anchor
-directly (no queue at all):
-
-```ts
-const ix = await client.buildPerpCancelOrderAnchorIx(group, fermiAccount, perp, orderId);
-await sendAndConfirm(connection, [ix], [owner]);
-```
-
-## Settling P&L
-
-```ts
-await client.perpSettlePnl(
-  group,
-  /* +PnL account */ winnerAccount,
-  /* -PnL account */ loserAccount,
-  perp,
-);
-```
-
-You can pass `fermiAccount` as either side; settlement is one
-operation per `(account_a, account_b, market)` triple. Most bots
-settle their own +PnL against the highest -PnL counterparty
-returned by the harness's `getSettleCandidates(perp)` helper.
-
-## Withdrawing
-
-```ts
-await client.tokenWithdraw(group, fermiAccount, usdcBank, /* HU */ 500, false);
-```
-
-The `allowBorrow` last argument is `true` to let the withdrawal
-roll into a borrow if you've got open perp positions consuming
-your spot collateral.
-
-## A clean shutdown sequence
-
-```
-1. perpCancelAllOrders(perp)   // for every perp you've touched
-2. perpSettlePnl(...)          // settle to USDC
-3. close any base position via a market order
-4. perpSettlePnl(...)          // again, to flush leftover unsettled PnL
-5. perpDeactivatePosition(perp)
-6. tokenWithdraw(usdc, all)
-7. accountClose()              // optional, if you want the rent back
-```
-
-You don't *have* to close — leaving collateral on Fermi is the
-default for a returning trader — but the steps above are the
-canonical "go to zero" path.
+Reviewed at `90267b20`. [executionQueue.ts](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/src/executionQueue.ts) · [ctm_sequencer.proto](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/scripts/execution-queue/ctm_sequencer.proto) · [v5_terminal.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/bin/service-mango-execution-engine/src/v5_terminal.rs). Source links require access to the implementation repository.

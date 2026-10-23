@@ -1,362 +1,78 @@
-# 02 · Architecture
+# Architecture: one order, two views, one execution authority
 
-This page explains how Fermi-v1 is built, what each component does,
-how they interact, and why the design delivers something that is
-usually a trade-off: **a fair, fully on-chain order book that still
-feels as fast as a centralized exchange.**
+Fermi separates a fast interaction path from the chain's economic state. A signed request enters an ordered market stream. The program stores a commitment to it, then accepts its exact payload when that item reaches the queue head. Meanwhile, a local harness can compute a provisional result from the same request stream and its current chain snapshot.
 
-It is written for two audiences at once — engineers who need the
-mental model before reading the mechanics chapters, and evaluators
-(prospective large users, market makers etc.) who
-need to judge whether the system is sound and viable.
+The useful mental model is a numbered work queue beside an on-chain exchange. The queue decides which admitted job may run next. The exchange decides whether that job is valid and what it does. The harness shows the result it expects before the chain completes the job.
 
-## The problem Fermi-v1 solves
-
-A perpetual-futures exchange has to do four things well:
-
-1. **Match orders fairly** — earlier orders should get filled
-   first, and nobody should be able to jump the queue or
-   front-run.
-2. **Execute trustlessly** — users should never have to hand custody,
-   matching, or risk enforcement to an operator.
-3. **Feel fast** — traders expect millisecond feedback, not
-   block-time feedback.
-4. **Stay live** — the exchange should keep working even when
-   individual off-chain services fail or misbehave.
-
-On-chain order books usually get (1) and (2) but fail (3): every action
-waits for block confirmation. Centralized exchanges get (3) but fail (1)
-and (2): you trust the operator's matching engine, sequencing, risk
-database, and custody. Fermi-v1 is architected so you do not have to
-choose.
-
-## The four components
-
-```
-        ┌───────────────────────────────────────────────────────────┐
-        │                  Trader (wallet / SDK / UI / bot)          │
-        └───┬───────────────────────┬──────────────────────┬─────────┘
-            │ 1. sign + submit      │ 4. read state        │ 5. stream
-            │    signed intent      │    (optimistic +     │    fills /
-            ▼                       │     confirmed)       │    events
-   ┌─────────────────┐              │                      │
-   │   POSq / RELAYER │             ▼                      ▼
-   │  (encrypted VDF  │     ┌──────────────────┐   ┌────────────────┐
-   │   tick ordering) │     │ OPTIMISTIC HARNESS│   │    FANOUT       │
-   │                  │     │ (off-chain read / │   │ (SSE broadcast) │
-   │ - validate       │     │  optimistic layer)│   │                 │
-   │ - assign seq     │     └────────▲──────────┘   └───────▲────────┘
-   │ - commit hash    │              │ reads               │ events
-   └────────┬─────────┘              │                      │
-            │ 2. commit              │                      │
-            │    + 3. reveal         │                      │
-            ▼                        │                      │
-   ┌──────────────────────────────────────────────────────────────────┐
-   │                FERMI-V1 ON-CHAIN EXCHANGE PROGRAM                  │
-   │                                                                    │
-   │   ExecutionQueueV5  →  matching engine  →  risk engine            │
-   │   (AMQ FIFO queue)     (FIFO order book)   (cross-margin health)  │
-   │                                                                    │
-   │   Group · Bank · FermiAccount · PerpMarket · BookSide · EventQueue │
-   └──────────────────────────────────────────────────────────────────┘
-                  ▲                                       │
-                  │ 6. EXECUTOR drives reveal/execute      │ events
-                  └───────────────────────────────────────┘
-                              Solana mainnet-beta
+```text
+Wallet signs exact payload + account list + timing
+                         |
+                         v
+              Relayer admission and sequence
+               +----+------------------+
+               |                       |
+               v                       v
+        Optimistic local replay     Commit hash to AMQ
+                   |                   |
+            provisional view       Reveal at head
+                   |                   |
+                   |             On-chain exchange
+                   |          matching + health + events
+                   |                   |
+                   |          consume / settle / confirm
+                   |                   |
+                   +<---- reconcile chain result -----+
 ```
 
-### 1. The on-chain exchange program
+## Follow a buy order
 
-This is the **only authority**. It is a Solana program that owns:
+**1. Authorize.** The client encodes a buy with a size, price bound, order behavior and timing envelope. Its signature binds the group, account, signer, target market, payload hash, account-meta hash, timing and client order ID. A relayer cannot change the price or substitute a different account list while retaining that signature.
 
-- The **execution queue** (`ExecutionQueueV5`) — a per-market,
-  AMQ-style queue that enforces first-come-first-served execution on
-  chain.
-- The **matching engine** — a price-time-priority FIFO order book.
-- The **order actions** — placement, cancels, matching, event
-  consumption, and book mutation.
-- The **risk engine** — cross-margin health, funding, liquidation,
-  bankruptcy resolution.
-- All **value-bearing state** — `Group`, `Bank` (collateral),
-  `FermiAccount` (your positions), `PerpMarket`, `BookSide`,
-  `EventQueue`.
+**2. Admit and order.** The relayer checks the request and reserves a sequence for its market. The reviewed Rust path has a per-market sequence-allocation lock and local preplay. Admission is an off-chain decision. It may reject requests before any on-chain record exists. The [POSq chapter](30-posq-sequencing.md) explains the additional evidence needed to connect sequence assignment to a fair arrival-order claim.
 
-Every order placement, cancel, match, fill, funding payment, and
-liquidation happens here, in a transaction recorded on the public ledger.
-Nothing off-chain can move your funds, change a fill, or execute a
-trade. The off-chain components exist to make the on-chain program
-**fast to use**, **explicitly sequenced**, and **fast to observe** —
-they have no matching authority.
+**3. Commit.** An authorized CTM signer signs a batch containing a first sequence and consecutive commitment entries. The program checks that signature, timing limits and available ring positions. It stores hashes, not the full CTM payloads. A commit confirms admission to the on-chain queue; it does not place or fill the order.
 
-The execution queue is the on-chain primitive that makes the FIFO claim
-real. It follows the Asynchronous Market Queue (AMQ) pattern: market
-actions are admitted into program state, tagged with a market sequence,
-and later executed by the program in the application's chosen order. In
-Fermi's case, that chosen order is strict per-market FIFO over the
-POSq-produced sequence. See [20 - Execution Queue v5](20-execution-queue.md).
+**4. Reveal and execute.** The executor supplies the payload and accounts for the current head. The program compares the reconstructed hash with the stored commitment, validates signature and current authorization where required, checks replay and account layout, and dispatches into exchange logic. Order matching and risk checks happen here on chain.
 
-This is the bedrock of the trust model: if every off-chain component
-disappeared tomorrow, your funds, orders, and positions would be exactly
-where the chain says they are, and you could still interact with the
-program directly (see [21 - Direct Fallback Pool](21-direct-fallback.md)).
+**5. Complete accounting.** Matching produces on-chain fill/out events and records taker exposure. Event consumption applies deferred maker/taker bookkeeping. PnL settlement can later move perp value into a bank balance. These are distinct transitions; a match is not automatically a wallet withdrawal.
 
-### 2. POSq and the relayer
+**6. Reconcile.** The harness replaces or corrects provisional state using observed chain outcomes. A successful transaction can contain an item failure or a no-op order outcome. Integrators must inspect queue outcomes and actual fill/order state.
 
-The fast path combines [POSq sequencing](30-posq-sequencing.md) with
-relayer plumbing. The relayer turns a trader's signed intent into an
-on-chain queue entry, but the ordering claim is not "trust the relayer."
-POSq sequences encrypted transactions over VDF ticks, then the relayer
-commits that ordered stream to the on-chain queue. Per order the fast
-path:
+## How the queue enforces FCFS
 
-1. **Receives** a signed *intent* — the order payload plus the
-   trader's Ed25519 signature plus the exact account list the
-   order will touch.
-2. **Validates** off-chain: signature correctness, account
-   freshness, oracle freshness, margin/health pre-check,
-   reduce-only rules. This is a courtesy fast-fail — it spares the
-   trader a wasted on-chain transaction — not a security boundary.
-3. **Sequences via POSq** for that market. In v1 this is single
-   sequencer mode: encrypted transactions are ordered over VDF ticks,
-   making reordering detectable rather than hidden in an opaque
-   sequencer.
-4. **Commits** a *hash* of the intent to the on-chain queue,
-   batched with up to 64 other commits for efficiency.
-5. **Returns** the assigned sequence and the commit transaction
-   signature to the trader, immediately.
+Suppose a market's head is sequence 41, and sequence 42 contains a more attractive trade for a validator. Revealing 42's payload against head 41 fails the commitment comparison. Reordering Solana transactions cannot turn 42 into 41. The executor must resolve 41 before processing 42.
 
-The v1 POSq sequencer is **not fully decentralized**, but it is also not
-a black-box sequencer. As covered in the [POSq page](30-posq-sequencing.md),
-it emits a VDF-tick ordering trail before reveal; once the relayer
-commits that order, the sequence and a hash of the payload are locked on
-chain. The fast path **cannot**:
+“Resolve” includes execution, expiry, terminal failure and permitted recovery. A missing sequence can be skipped under gap rules. An administrator can pause execution and reclaim a head. Therefore the precise guarantee is **ordered resolution of admitted market sequences under the queue's rules**, not guaranteed fills for every accepted request.
 
-- Change your order's contents after you signed it — the reveal
-  step re-hashes the payload and checks your signature.
-- Silently reorder same-market intents relative to the emitted POSq
-  sequence — the VDF-tick/commit trail makes that detectable, and the
-  on-chain queue enforces the committed order.
-- Substitute account lists — the account list is bound into the
-  signed intent.
-- Replay your order — the on-chain replay cache rejects duplicate
-  intent hashes.
-- Move your funds — every state change requires your signature,
-  verified inside the program.
+Three orderings must stay separate:
 
-The remaining v1 gap is availability and pre-admission censorship: a
-single sequencer can be down, slow, or refuse an intent before it enters
-the POSq log. The direct fallback pool mitigates that today. The
-[v2 POSq roadmap](30-posq-sequencing.md#v2-consensus-level-safeguards)
-adds voting, leader rotation, and permissionless participation to reduce
-that single-sequencer liveness/admission assumption.
+| Ordering | Meaning |
+| --- | --- |
+| Arrival / admission | Which request the sequencing service recognizes first |
+| AMQ sequence | Which committed request the program resolves first within a market |
+| Book price-time priority | Which resting order trades first at the best eligible price |
 
-### 3. The executor (off-chain crank)
+A better-priced resting order wins over an older worse-priced order. At equal prices, the book's insertion sequence gives time priority. No global sequence orders all markets, and maintenance or enabled direct instruction paths are not automatically part of the AMQ stream.
 
-A committed intent is just a hash on chain; it has not executed
-yet. The **executor** is the off-chain worker that finishes the
-job. It:
+## Why feedback can be fast
 
-1. Picks up committed intents in sequence order.
-2. Builds a **reveal** transaction containing the full intent
-   payload and account list.
-3. Submits it. The on-chain program then re-hashes the payload,
-   verifies it matches the commit, verifies the trader's
-   signature, checks the replay cache, and **dispatches the order
-   into the matching engine**.
-4. Advances the queue head so the next sequence can execute.
+The relayer and harness do not need to wait for a full RPC round trip for every display update. They can use cached chain state, local Rust preplay, event streams and batched transaction delivery. Once the request order is known, replay has fewer unknowns than a preview whose order may still change.
 
-The executor is also **unprivileged**. If it builds a wrong reveal,
-the hash check fails and the transaction reverts. If it stalls, a
-watchdog ("autodrop") advances the queue past the stuck item so a
-single failure cannot wedge a market. Anyone can run an executor;
-in production the operator runs the relayer and executor together
-in one service for low latency.
+It still has unknowns: oracle updates, other market activity on a cross-margin account, liquidations, direct calls, stale snapshots, missing events and failed transactions. Ordering makes preplay useful; it does not make a preview final. [Harness and latency](36-harness-and-latency.md) defines what each latency measurement actually measures.
 
-> Commit/reveal in one sentence: the relayer **locks the order
-> (sequence + hash)** first, and the executor **opens it
-> (payload)** second. Locking before opening is what makes the
-> ordering provably fair — see "Why commit/reveal" below.
+## What is shared and what can run in parallel
 
-### 4. The optimistic harness
+Each v5 market has its own queue PDA. Unrelated market queues can progress separately, and commit/reveal batching amortizes transaction overhead. Same-market execution remains serial at the head. Shared trader accounts, banks and other writable accounts can also serialize transactions across markets. Queue capacity and transaction-size limits bound bursts; batching cannot remove those limits.
 
-The harness is the component that makes Fermi-v1 *feel* fast. It is
-an off-chain service that maintains a continuously-updated mirror
-of all on-chain state — every order book, every account, every
-oracle — and serves it over plain HTTP and Server-Sent Events.
+## FLP uses the same exchange
 
-Crucially, the harness publishes **two views**:
+The FLP program owns a trading account through its authority PDA. Its delegated market maker submits signed v5 intents, subject to the core delegate-intent gate. The vault does not replace matching or margin. It adds rules for whose capital is active, how shares are priced, when exit exposure ends, and how recovery reduces inventory.
 
-- **Confirmed view** — state derived purely from finalized
-  on-chain transactions. This is ground truth; it is what you
-  reconcile against.
-- **Optimistic view** — the confirmed view *plus* the intents the
-  POSq/relayer has already accepted but which have not yet been
-  finalized on chain. Because ordering is fixed by POSq, enforced by
-  the on-chain AMQ-style queue, and matched by deterministic program
-  logic, the harness can replay an accepted intent against its mirror
-  and predict the on-chain outcome **before the block lands**.
+The vault's withdrawal FIFO is a queue of **epoch batches**. It is separate from the exchange's queue of **trade intents**. Mixing the two hides an important distinction: a trade queue decides execution order; a withdrawal queue decides which LP batch can receive cash next.
 
-The optimistic view is what gives a trader sub-second feedback:
-"your order is sequenced at position N and, against the current book, it
-fills 1.4 SOL at \$150.2." Confirmation follows a beat later and —
-because the same deterministic queue and matcher run in both places —
-matches the prediction. This optimistic pre-play is unavailable on
-venues where ordering is discretionary, hidden, or mutable after the
-off-chain preview has been computed.
+Read [AMQ mechanics](20-execution-queue.md), [FLP accounting](32-flp-accounting.md), and [trust boundaries](37-security-and-invariants.md) next.
 
-The **fanout** service sits in front of the harness's event stream
-and re-broadcasts it to many subscribers at once, so thousands of
-traders and bots can stream fills without overloading the core
-harness. It is purely a scaling layer.
 
-Like the relayer and executor, the harness has **no authority**.
-It cannot change state; it can only read and predict it. A wrong
-harness can mislead a UI for a moment, but the on-chain program
-will not honor anything the harness says — it only honors signed,
-sequenced, revealed intents.
+## Implementation reference
 
-## How a trade flows through all four
-
-```
-  t0   Trader signs an intent (order + signature + account list).
-  t0   SDK sends it to POSq / RELAYER.
-  t0+  POSq orders the encrypted intent over VDF ticks; relayer commits seq 4711.
-       → Relayer returns (seq 4711, commit tx sig) to the trader.
-       → Harness sees the accepted intent and updates the
-         OPTIMISTIC view: the trader's UI shows the (predicted) fill
-         in well under a second.
-  t1   EXECUTOR builds the REVEAL for seq 4711 and submits it.
-  t1   On-chain program re-hashes payload, checks signature, checks
-       replay cache, DISPATCHES into the matching engine.
-       → Order matches; FillEvent written; queue head advances.
-  t2   Fill is finalized on chain. Harness CONFIRMED view now
-       matches what the optimistic view already showed.
-       → Fanout broadcasts the FillEvent over SSE.
-```
-
-The trader experiences `t0+` — milliseconds. The chain reaches finality
-at `t2` — a second or two later. The gap between them is bridged by the
-optimistic view, and it is *safe* to bridge because the prediction is
-made from the same deterministic order, queue, and matcher that the chain
-will run.
-
-## Why commit/reveal — the fairness mechanism
-
-The execution queue uses a two-step **commit then reveal** protocol.
-POSq first orders encrypted intents over VDF ticks. The relayer then
-commits only a *hash* of the intent and its sequence number; the full
-payload is revealed later by the executor. This ordering — encrypted
-sequence first, lock on chain second, open later — is what makes
-Fermi-v1's fairness auditable rather than merely promised:
-
-- **First-come-first-served (FCFS) is enforced against the POSq log.**
-  Each market has one monotonically increasing sequence. Orders execute
-  in sequence order, period. In v1, POSq's single sequencer emits an
-  encrypted VDF-tick order; once committed, the choice is public and
-  immutable. There is no room for a privileged actor to slip an order in
-  front of yours after seeing it.
-- **No payload-based reordering.** When the relayer commits, it
-  only publishes a hash. Nobody — not the relayer, not a
-  validator, not another trader — can see *what* your order is
-  until it is already locked into its sequence position. So
-  ordering cannot be influenced by order contents. This neutralizes
-  the most common on-chain MEV: reordering a block to extract value
-  from pending trades.
-- **No tampering.** At reveal, the program recomputes the hash from
-  the payload and account list. Any change — price, size, account,
-  a single bit — produces a different hash and the transaction
-  reverts.
-- **No replay.** Each consumed intent hash is recorded in an
-  on-chain cache. A signed order cannot be fired twice.
-- **No silent drops.** Every stage of an intent emits a structured,
-  queryable event. Given `(market, sequence)` you can ask the
-  harness exactly where an order is and why — accepted, committed,
-  revealed, executed, or dropped, with the reason.
-
-The result is an order book where **time priority is a property of
-the protocol**, the same way it is on a traditional exchange's
-matching engine — except here it is publicly verifiable and nobody
-has to be trusted to honor it.
-
-## Why this combination is powerful
-
-Taken together, the four components give Fermi-v1 a profile that is
-hard to get any other way:
-
-| Property | How the architecture delivers it |
-|---|---|
-| **Fair ordering (FCFS)** | [POSq](30-posq-sequencing.md) encrypted VDF ticks produce an auditable order; one on-chain sequence per market enforces it; commit-before-reveal hides payloads until ordering is locked. |
-| **Low perceived latency** | The optimistic harness pre-plays accepted intents in milliseconds; deterministic ordering, AMQ enforcement, and deterministic matching make the prediction meaningful. |
-| **Fully on-chain execution** | The on-chain program is the sole authority for order placement, cancels, matching, fills, risk, and accounting; off-chain components have zero custody and no matching authority. |
-| **Censorship resistance** | In v1, direct fallback lets you enter the queue on chain if the single fast-path sequencer is unavailable or refusing admission; [v2 POSq](30-posq-sequencing.md#v2-consensus-level-safeguards) adds voting, leader rotation, and permissionless participation. |
-| **Throughput** | Per-market queues are independent, so markets commit and execute in parallel; commits are batched up to 64 at a time. |
-| **Capital efficiency** | A single cross-margin `FermiAccount` backs positions across every market; collateral is not fragmented per market. |
-| **Operational transparency** | Every intent leaves an auditable trail; `GET /trace/sequence/{market}/{seq}` answers "where is my order" in seconds. |
-| **Verifiability** | Matching engine, risk engine, and queue are open-source on-chain code; anyone can audit or re-derive every fill. |
-
-The headline is the pairing of the last two rows of the trade-flow
-diagram: **FCFS fairness from the on-chain queue, plus
-centralized-exchange-like responsiveness from the optimistic
-harness.** On-chain books are usually fair but slow to interact
-with; centralized books are fast but require trust. Fermi-v1's
-separation of concerns — execution on chain, POSq sequencing in an
-auditable encrypted VDF-tick log plus verifiable queue, speed in a
-powerless read layer — is what lets it
-offer both at once.
-
-## The trust model, stated plainly
-
-For an evaluator, the single most important question is "what can
-each party do to me?" The answer:
-
-| Party | Can do | Cannot do |
-|---|---|---|
-| **On-chain program** | Order placement, cancels, matching, fills, risk, accounting, and liquidation — it is the authority. It is open-source and audited; its behavior is fixed by deployed bytecode. | Act outside its code. Upgrades are governance-gated. |
-| **POSq / relayer v1** | Sequence encrypted intents over VDF ticks; commit the resulting order; refuse or delay pre-admission service. | Alter, silently reorder an emitted sequence, replay, forge, execute, or touch your funds. |
-| **Executor** | Drive reveals; choose timing. | Change payloads (hash check); wedge a market (autodrop watchdog); move funds. |
-| **Harness / fanout** | Read and predict state; serve it fast. | Change any state; force the program to honor a prediction. |
-| **Another trader / validator** | Submit their own orders; build blocks. | See your order contents before sequencing; reorder same-market intents; front-run committed flow. |
-| **You** | Sign and submit your own intents; withdraw your own funds; liquidate undercollateralized accounts. | Affect anyone else's account without their signature. |
-
-Every off-chain component is **replaceable and unprivileged**. The
-operator runs them for convenience and speed; a sufficiently
-motivated trader can run their own, or bypass them entirely via the
-direct path. That is the property that makes the "feels like a CEX"
-speed safe to rely on: the speed layer cannot betray you, because
-it has nothing to betray you *with*.
-
-## Liveness — what happens when things fail
-
-| Failure | Effect | Mitigation |
-|---|---|---|
-| POSq / relayer down | New orders can't take the fast path. | Direct fallback pool: submit intents on chain yourself. Cancels can also be sent as plain on-chain instructions. |
-| Executor down | Committed intents don't reveal. | Any party can run an executor; the autodrop watchdog advances past stalled items. |
-| Harness down | Optimistic reads unavailable. | Read confirmed state directly from any Solana RPC; trading is unaffected. |
-| Fanout down | Event streaming degraded. | Subscribe to the harness directly, or poll. |
-| Oracle stale | Affected market pauses (reads revert). | Anyone can push a fresh oracle update; other markets unaffected. |
-| Solana congestion | Higher confirmation latency. | Optimistic view still serves; priority fees; per-market isolation. |
-
-No single off-chain failure can cause loss of funds or rewrite on-chain
-execution. In v1, the single POSq sequencer can still be an availability
-or pre-admission bottleneck. The worst case is degraded latency or a
-temporary inability to *enter* new orders via the fast path — and even
-then the direct on-chain path remains open.
-
-## Where to read more
-
-- [30 - POSq Sequencing](30-posq-sequencing.md) — the v1
-  single-sequencer model, the v2 roadmap, and how sequencing differs
-  from on-chain execution.
-- [10 - FIFO Order Book](10-fifo-orderbook.md) and
-  [11 - Matching Engine](11-matching-engine.md) — the on-chain
-  matcher in detail.
-- [15 - Margin & Health](15-margin-and-health.md) — the cross-margin
-  risk engine.
-- [20 - Execution Queue v5](20-execution-queue.md) — the commit/
-  reveal queue, sequencing, and recovery, with on-chain data
-  structures.
-- [21 - Direct Fallback Pool](21-direct-fallback.md) — the
-  censorship-resistant submission path.
-- [25 - HTTP & SSE API](25-api-http.md) and
-  [26 - gRPC API](26-api-grpc.md) — the harness and relayer
-  interfaces.
+Reviewed at `90267b20`. [execution_queue_v5.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/instructions/execution_queue_v5.rs) · [execution_queue_v5.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/execution_queue_v5.rs) · [main.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/bin/service-mango-execution-engine/src/main.rs) · [engine.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/rust-harness/src/engine.rs) · [close_epoch.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/instructions/close_epoch.rs). Source links require access to the implementation repository.

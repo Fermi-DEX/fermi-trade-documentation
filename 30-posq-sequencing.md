@@ -1,152 +1,58 @@
-# 30 · POSq Sequencing
+# POSq, arrival order and FCFS
 
-POSq is Fermi's verifiable sequencing scheme. It decides the order in
-which signed intents enter each market, then anchors that order into the
-on-chain execution queue before the Fermi program places, cancels,
-matches, fills, rejects, or liquidates anything.
+POSq is the sequencing design described in Fermi's earlier documentation: order encrypted intents over a VDF tick stream, expose evidence of that order, then commit the resulting market sequence to the AMQ. Its purpose is to make ordering decisions auditable before execution reveals economically useful payloads.
 
-This page is the canonical reference for POSq in these docs. The
-research paper is available at
-[app.fermi.trade/research.pdf](https://app.fermi.trade/research.pdf).
+The AMQ provides the on-chain enforcement half of that design. It cannot, by itself, prove which request reached an off-chain service first.
 
-## The basic split
+## Evidence boundary for this review
 
-Fermi separates **sequencing** from **execution**.
+The reviewed `fermi-v1` tree contains:
 
-Sequencing is off chain. That is not unusual: every blockchain has an
-off-chain ordering path before transactions land, whether the ordering
-comes from RPC routing, priority fees, propagation latency, or the
-current block leader. POSq makes that ordering path explicit and
-auditable.
+| Evidence | What it establishes |
+| --- | --- |
+| `continuum_sequencer.proto` | An interface for accepted transactions and ticks, including VDF proof fields, batch hash and previous output |
+| `ctm_sequencer.proto` | A relayer interface accepting signed payloads and account metas |
+| Rust relayer implementation | Local admission, sequence allocation, preplay, batching and transaction delivery |
+| v5 commit handler | Verification of the configured CTM batch signature and storage of sequence-bound commitments |
+| v5 reveal handlers | Head-first hash verification, authorization and on-chain dispatch |
 
-Execution is on chain. The deployed Fermi program owns the order book,
-matching engine, order placement, cancels, fills, risk checks, funding,
-PnL settlement, and liquidation. POSq does not match orders, mutate
-balances, own custody, or decide whether an order is valid. It only
-produces an ordered stream of intents for the on-chain AMQ-style queue
-to enforce.
+The presence of VDF fields in an interface does not establish a working proof verifier or deployment. This review did not identify a VDF verification or encrypted-admission implementation in the examined relayer and on-chain paths. The earlier documentation's [research-paper link](https://app.fermi.trade/research.pdf) could not be retrieved during the review. Consequently, the encrypted-tick description here is a **design description**, not a verified claim about the deployed fast path.
 
-The optimistic harness is separate again. It can pre-play the
-deterministic on-chain path so traders see a fast pre-confirmation, but
-that simulation is non-binding. The chain remains the only authority.
+## Why order before reveal?
 
-## Why POSq exists
+If an operator learns the contents of competing orders before fixing their order, it can choose a favorable sequence. The POSq design seeks to constrain that discretion by associating encrypted requests with a verifiable tick/batch history before revealing payloads.
 
-An exchange needs fast feedback, but a trader should not have to trust a
-private operator database for ordering. A normal black-box sequencer can
-say "this was the order" after it has already seen payloads and market
-conditions. POSq narrows that trust surface.
+A verifiable delay function supplies evidence of sequential computation under its cryptographic assumptions. It does not alone prove the true arrival time of a network packet, guarantee admission or make data available. A complete fairness argument also needs rules for ingress observation, receipt issuance, tick assignment, batch membership, omissions, reveal availability and the mapping into market sequences.
 
-POSq gives Fermi three practical properties:
+## The end-to-end argument
 
-- **Encrypted ordering before reveal.** The sequencer orders encrypted
-  transactions before payloads are visible.
-- **A VDF-tick ordering trail.** Transactions are assigned to an
-  ordered tick stream, making the emitted sequence auditable.
-- **On-chain enforcement.** The POSq order is committed to the
-  per-market execution queue, and the queue executes in that committed
-  order.
+For an auditable FCFS claim, the evidence must connect all of these steps:
 
-The result is not "trust the relayer to be fair." The more precise claim
-is: once an intent enters the POSq flow and an order is emitted,
-reordering relative to that emitted order is detectable, and the
-on-chain queue enforces the committed sequence.
+```text
+recognized arrival → accepted receipt → tick / ordered batch
+                   → market sequence → on-chain commitment
+                   → head resolution → book result
+```
 
-## V1: single-sequencer POSq
+The source reviewed here enforces the commitment-to-head-resolution portion. To extend that claim to recognized arrival, a deployment must publish or otherwise make available the upstream ordering evidence and its verification rules.
 
-Fermi v1 runs POSq in **single-sequencer mode**.
+A hash commitment prevents changing its preimage after commitment. It does not prove payload confidentiality from an operator that received plaintext, and it does not establish fairness of the sequence chosen before commitment. A randomizer helps prevent guessing predictable preimages; it is not encryption.
 
-In v1:
+## Single-sequencer design and future participation
 
-1. A user signs an intent.
-2. The fast path receives the encrypted transaction.
-3. POSq orders encrypted transactions over VDF ticks.
-4. The relayer commits the resulting sequence and intent hash into the
-   on-chain execution queue.
-5. The executor later reveals the payload.
-6. The on-chain program verifies the hash, signature, accounts, replay
-   cache, health, market constraints, and then executes the intent.
+The previous docs describe v1 as single-sequencer POSq and propose voting, leader rotation and permissionless participation for v2. Treat those as design/deployment claims requiring their own implementation evidence. A single service retains admission and availability power unless another enforced mechanism constrains it.
 
-The v1 sequencer is not fully decentralized, but it is also not a
-black-box matching engine. It cannot silently reorder an emitted POSq
-sequence without leaving evidence in the VDF-tick and commitment trail.
-It cannot change a signed order, substitute accounts, replay an intent,
-touch funds, or execute a fill off chain.
+More participants also need explicit rules for equivocation, censorship, data availability and failure recovery. Those properties do not follow merely from adding signatures or a VDF.
 
-The remaining v1 assumption is **availability and pre-admission
-censorship**. A single sequencer can be down, slow, or refuse to admit a
-transaction before it appears in the POSq log. Fermi's direct on-chain
-submission path exists as the v1 backstop for that case: a user can
-bypass the fast path and submit directly to the program.
+## What users can rely on from this source
 
-## V2: consensus-level safeguards
+A valid higher-sequence reveal cannot replace the current queue head. The program checks the exact commitment and authorizes the action against current account state. The book applies its own price-time rules after dispatch. Queue expiry, gaps, terminal failures and admin reclaim are visible exceptions to ordinary execution; enabled direct instructions are a separate path.
 
-Fermi v2 is planned to add the consensus-level pieces around POSq:
+This narrower claim is still useful. Fixing admitted order lets the harness preplay a more predictable stream while the exchange executes on chain. It does not remove oracle changes, cross-account interactions or reconciliation risk.
 
-- **Voting** over sequencer outputs, so ordering claims are checked by a
-  participant set instead of accepted from one operator.
-- **Leader rotation**, so the sequencing role is not permanently held
-  by one service.
-- **Permissionless participation**, so sequencing and verification can
-  open beyond a fixed operator set.
+See [the queue](20-execution-queue.md), [architecture](02-architecture.md), and [security boundaries](37-security-and-invariants.md).
 
-These additions are intended to close the remaining v1 gaps around
-admission, liveness, and single-operator control. They do not change the
-core exchange model: POSq remains the off-chain sequencing layer, and
-the Fermi program remains the on-chain execution authority.
 
-## How POSq connects to AMQs and FCFS
+## Implementation reference
 
-Fermi's first-come-first-served guarantee is enforced in two layers:
-
-1. POSq emits an auditable per-market order.
-2. The on-chain AMQ-style execution queue commits and executes that
-   order monotonically.
-
-The queue does not execute an intent just because the relayer says so.
-At reveal time, the program checks the committed hash, account hash,
-user signature, replay cache, expiry, health, and market rules. Only
-then does the program dispatch the intent into the matching engine.
-
-AMQ means **Asynchronous Market Queue**: market actions are admitted into
-program state and executed later in the order the application specifies.
-Temporal describes AMQs as a Solana-program primitive for
-application-controlled execution, where queued asynchronous instructions
-can be tagged with ordering metadata and processed later without Solana
-protocol changes. See
-[Application Controlled Execution through Asynchronous Market Queues](https://www.temporal.xyz/writings/application-controlled-execution-ace-through-asynchronous-market-queues-amqs).
-Fermi uses that primitive for strict FIFO rather than for
-cancel-before-order priority: the application-defined order is the POSq
-sequence, and the on-chain queue advances through that sequence one head
-at a time.
-
-This deterministic split is what unlocks optimistic pre-play. Once POSq
-has fixed the sequence and the AMQ queue has committed it, the optimistic
-harness can replay the same deterministic matching path the program will
-execute. Other venues with discretionary or mutable ordering cannot make
-the same prediction, because the off-chain preview may no longer match
-the order that actually executes.
-
-## How to read POSq claims in these docs
-
-When another page says POSq provides fair or verifiable ordering, it
-means:
-
-- ordering is off chain but auditable;
-- in v1, ordering is produced by a single sequencer over encrypted VDF
-  ticks;
-- reordering relative to the emitted POSq sequence is detectable;
-- pre-admission censorship and sequencer availability are the remaining
-  v1 gaps;
-- v2 is planned to add voting, leader rotation, and permissionless
-  participation;
-- the AMQ-style execution queue enforces the emitted order on chain;
-- all execution remains on chain.
-
-## Related
-
-- [02 - Architecture](02-architecture.md)
-- [20 - Execution Queue v5](20-execution-queue.md)
-- [21 - Direct Fallback Pool](21-direct-fallback.md)
-- [25 - HTTP & SSE API](25-api-http.md)
-- [26 - gRPC API (Relayer)](26-api-grpc.md)
+Reviewed at `90267b20`. [continuum_sequencer.proto](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/scripts/execution-queue/continuum_sequencer.proto) · [ctm_sequencer.proto](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/scripts/execution-queue/ctm_sequencer.proto) · [main.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/bin/service-mango-execution-engine/src/main.rs) · [execution_queue_v5.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/instructions/execution_queue_v5.rs). Source links require access to the implementation repository.

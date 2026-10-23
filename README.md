@@ -1,120 +1,32 @@
-# Fermi-v1 Documentation
+# Fermi documentation
 
-Fermi-v1 (`frmv1`) is a non-custodial, fully on-chain perpetual-futures
-exchange built on Solana. A single on-chain program owns the order
-book, the cross-margin risk engine, funding, and liquidation;
-[POSq](30-posq-sequencing.md) sequences encrypted intents over VDF ticks
-and anchors that order into a per-market commit/reveal execution queue;
-and an optimistic harness gives traders millisecond-level feedback while
-on-chain finality follows behind.
+Fermi is a Solana perpetual-futures exchange with on-chain order books, matching, margin checks, funding, liquidation, and settlement. Off-chain services admit and order signed requests, submit transactions, and give traders a fast provisional view. The program determines the economic result.
 
-This site is the user-facing reference for **traders, market makers,
-liquidators, integrators, and prospective partners**
-evaluating the system. It explains both *how Fermi-v1 works* and
-*why the design is viable* — start with
-[02 - Architecture](02-architecture.md) for the system-level case.
+Start with [the architecture](02-architecture.md). It follows one order through admission, the Asynchronous Market Queue (AMQ), the optimistic harness, and on-chain execution. Then read [FCFS and POSq](30-posq-sequencing.md) for the exact ordering boundary.
 
+## Choose a path
 
-### Getting started
-- **[01 - Overview](01-overview.md)** — What Fermi-v1 is, what makes
-  it different, and the moving pieces.
-- **[02 - Architecture](02-architecture.md)** — The on-chain program,
-  [POSq sequencing layer](30-posq-sequencing.md), relayer/executor
-  plumbing, and optimistic harness; how they interact; why the design is
-  fair (auditable FCFS) and fast (low optimistic latency); the trust
-  model and viability case.
-- **[03 - Getting Started](03-getting-started.md)** — Connect a wallet,
-  fund an account, place your first order.
-- **[04 - Glossary](04-glossary.md)** — Every term used in these docs.
+| You want to… | Read |
+| --- | --- |
+| Understand the system | [Overview](01-overview.md), [architecture](02-architecture.md), [glossary](04-glossary.md) |
+| Trade | [Getting started](03-getting-started.md), [orders](12-order-types.md), [fees](14-fees.md), [margin](15-margin-and-health.md) |
+| Understand execution | [Order book](10-fifo-orderbook.md), [matching](11-matching-engine.md), [AMQ](20-execution-queue.md), [POSq](30-posq-sequencing.md), [harness](36-harness-and-latency.md) |
+| Understand the money | [Collateral](06-collateral.md), [funding](09-funding.md), [PnL](16-entry-pnl.md), [liquidation](17-liquidation.md), [bankruptcy](18-bankruptcy-insurance.md) |
+| Use FLP | [Vault overview](31-flp-vault.md), [shares and NAV](32-flp-accounting.md), [deposits and withdrawals](33-flp-lifecycle.md), [recovery](34-flp-recovery.md) |
+| Integrate | [Trader workflow](22-trader-workflow.md), [SDK](23-sdk.md), [HTTP](25-api-http.md), [gRPC](26-api-grpc.md), [FLP integration](35-flp-integration.md) |
+| Assess security | [Security boundaries](37-security-and-invariants.md), [risks](19-risk-warning.md), [review scope and corrections](38-source-and-review.md) |
+| Diagnose a problem | [FAQ](28-faq.md), [support](29-support.md), [operations](39-operations.md) |
 
-### Accounts & collateral
-- **[05 - Accounts](05-accounts.md)** — Fermi account, sub-accounts,
-  delegation, account size.
-- **[06 - Collateral & Banks](06-collateral.md)** — Supported tokens,
-  deposit/borrow indexes, weight scaling.
+## What this version describes
 
-### Markets
-- **[07 - Perp Market Specs](07-market-specs.md)** — Lot sizes, tick
-  sizes, leverage tiers, market parameters by symbol.
-- **[08 - Pricing & Mark Price](08-pricing-mark-price.md)** — Oracle
-  feeds, stable price, mark price.
-- **[09 - Funding](09-funding.md)** — Funding rate algorithm, impact
-  price, settlement cadence.
+This documentation was reviewed on 23 October 2026 against `fermi-v1/main` commit `90267b20df99d0eacf35dbd407c67c33d809172b`. It describes source behavior, including the latest FLP recovery changes. A source commit does not establish which binary or configuration is deployed on a network. Verify the program, group, instruction gates, and vault version before using an integration.
 
-### Order book and matching
-- **[10 - FIFO Order Book](10-fifo-orderbook.md)** — Price-time priority
-  encoding, fixed and oracle-pegged trees.
-- **[11 - Matching Engine](11-matching-engine.md)** — Match loop, fill
-  events, eviction, post-only behavior.
-- **[12 - Order Types](12-order-types.md)** — Limit, IOC, Market,
-  PostOnly, PostOnlySlide, OraclePegged, with TIF and reduce-only.
-- **[13 - Self-Trade Prevention](13-self-trade-prevention.md)** —
-  DecrementTake, CancelProvide, AbortTransaction.
-- **[14 - Fees](14-fees.md)** — Maker/taker, IOC penalty, settle
-  incentive, liquidation fees, platform fees.
+The POSq chapter distinguishes the sequencing design in the earlier documentation from the commit/reveal implementation present in this source tree. Latency examples describe stages, not service guarantees.
 
-### Risk and PnL
-- **[15 - Margin Math & Account Health](15-margin-and-health.md)** —
-  Init / Maint / Liquidation-end health, weighted positions.
-- **[16 - Entry Price and PnL](16-entry-pnl.md)** — Average entry,
-  unrealized vs settled, hupnl, realized trade P&L.
-- **[17 - Risk Tiers and Liquidation](17-liquidation.md)** — Triggers,
-  phases, fees, force-cancel and force-close.
-- **[18 - Bankruptcy & Insurance Fund](18-bankruptcy-insurance.md)** —
-  Insurance flow, socialized loss, unsocialized loss.
-- **[19 - Risk Warning](19-risk-warning.md)** — What can go wrong, what
-  cannot, and what's still your responsibility.
+## Reading conventions
 
-### Execution queue
-- **[20 - Execution Queue v5](20-execution-queue.md)** — Per-market
-  AMQ-style FIFO, commit/reveal, sequencing, gap recovery, autodrop.
-- **[21 - Direct Fallback Pool](21-direct-fallback.md)** — Censorship-
-  resistant submission path.
-- **[30 - POSq Sequencing](30-posq-sequencing.md)** — Verifiable
-  off-chain sequencing, v1 single-sequencer mode, and the v2 roadmap.
-
-### Integrating
-- **[22 - Trader Workflow](22-trader-workflow.md)** — End-to-end flow
-  for a bot or UI.
-- **[23 - SDK](23-sdk.md)** — TypeScript and Rust clients.
-- **[24 - Direct CPI Integration](24-direct-cpi.md)** — Submit orders
-  from another Solana program.
-- **[25 - HTTP & SSE API](25-api-http.md)** — Optimistic harness REST,
-  fanout SSE.
-- **[26 - gRPC API (Relayer)](26-api-grpc.md)** — `SubmitIntent`,
-  signing, error codes.
-- **[27 - WebSocket / Streams](27-streams.md)** — Subscriptions for
-  fills, book deltas, funding.
-- **[28 - FAQ](28-faq.md)** — Common questions about execution,
-  margin, and recovery.
-- **[29 - Support](29-support.md)** — Where to get help.
-
-## Conventions used in these docs
-
-- Every formula is taken from the on-chain code; the source file and
-  line range is cited in italics under the formula.
-- All amounts on chain are in **native** (smallest token unit, e.g.
-  USDC = 6 decimals → 1 USDC = `1_000_000` native). Where docs show
-  human numbers we use **HU**.
-- Prices on the book are in **price lots**: integer ratio of
-  `quote_lot_size` to `base_lot_size`. To convert:
-  `native_price = price_lots × quote_lot_size / base_lot_size`.
-- `I80F48` is a fixed-point type — 80 integer bits, 48 fractional bits
-  — used everywhere weights, fees, and funding are stored.
-- Solana primitives: a *slot* is the validator round (~400ms). A
-  *signature* is the on-chain tx hash you can look up on a block
-  explorer.
-
-## Network deployment
-
-| Field | Value |
-|---|---|
-| Cluster | Solana mainnet-beta |
-| Program ID | `FRMiKrj2hQGvcZQtSDdiFRZ4cmaTjuc1QVkM2B5ShUvA` |
-| Group | `87qUKYQoK1f9gYQjYzw5NcRo7wx6VmfhTGJ7JenoeYAA` |
-| SOL-PERP queue | `H298eJU5b4uyAHpeeZQdXS9JUttmmaMh2U6RYkUHFfE9` |
-| ETH-PERP queue | `764RYGQACUpWqx3dtYUmfG2G3MK6wXT5WPPRHJxzCJQP` |
-| BTC-PERP queue | `ArvDdpYTojBbH4FkCxLxALmX3Sb5qr4VsmFFkgV2NSC3` |
-
-Devnet endpoints are listed in [03 - Getting Started](03-getting-started.md).
-# fermi-trade-documentation
+- **On-chain** means validated and recorded by a Solana program. **Optimistic** means provisional local state that can be corrected.
+- Amounts in code are native integer units. For a six-decimal token, `1_000_000` units equal one token. Examples explicitly use human units when appropriate.
+- A queue sequence belongs to one market. An order ID, client order ID, event sequence, and transaction signature identify different things.
+- Parameters such as fees, weights, oracle limits, pauses, and recovery grace periods are configuration. Read the relevant accounts; sample numbers are not a current market schedule.
+- Source references are pinned to the reviewed commit. [The review map](38-source-and-review.md) records important changes from the previous docs.

@@ -1,133 +1,32 @@
-# 18 · Risk Warning
+# Risks and limits
 
-Trading perpetual futures is high-risk. Read this page carefully.
+Fermi's checks constrain permitted state transitions. They do not guarantee profitable trading, immediate exits or uninterrupted service.
 
-## You can lose more than you think
+| Risk | Mechanism and consequence |
+| --- | --- |
+| Leverage and cross-margin | Losses in one position consume shared account collateral and can trigger liquidation |
+| Oracle error or unavailability | Incorrect prices can distort valuation; invalid or stale feeds can block health-dependent actions |
+| Market liquidity | Orders, stops and recovery IOCs may partially fill or fail to fill |
+| Bank liquidity | Positive balances or NAV may not be immediately withdrawable |
+| Sequencer / relayer availability | Requests can be refused or delayed before commitment; missing reveal material can block a head |
+| Optimistic-state error | A preview can be corrected after chain execution or reconciliation |
+| Bounded replay guard | The on-chain duplicate cache does not provide permanent exactly-once admission |
+| Administrative control | Pauses, queue recovery, parameters and upgrades can change availability or behavior |
+| Shared losses | Bank or perp loss-allocation mechanisms can affect participants beyond the bankrupt account |
+| Delegate compromise | An authorized trading key can create losses even when it cannot withdraw to an arbitrary wallet |
+| Software and integration errors | Incorrect account lists, units, versions or transaction handling can reject or mis-authorize actions |
 
-Perp trading uses leverage. A 5 % adverse move on a 10× position
-wipes out 50 % of your collateral in that account. Your entire
-collateral can be wiped out in seconds during fast markets.
+## FLP-specific exposure
 
-You may also lose **more than the position you opened**: if the
-market gaps through your stop-loss before any matcher pass runs, you
-will be liquidated at the post-gap price, not at your stop. The
-liquidation discount, platform fee, and any insurance/socialization
-events apply on top of the price loss.
+Public pre-deposit principal stays outside trading until graduation, but still depends on token custody and program behavior. After graduation, LP value moves with the strategy. A requested withdrawal remains equity until its batch is funded; burning the wallet shares does not lock a cash amount.
 
-## Operational risks specific to Fermi
+Recovery sells or reduces inventory under bounded rules. It cannot create a counterparty or bank liquidity. Full closure can reserve cash against negative residual perp PnL and, after the required grace, forfeit positive residual PnL that has not settled.
 
-These are above and beyond market risk:
+Non-transferable shares cannot be sold to another user as an alternative exit. An upgrade authority can change program code outside the vault's parameter timelock. Examine the deployed authorities and current configuration when assessing those risks.
 
-### Oracle pause / staleness
+For mechanisms and specific boundaries, read [security and invariants](37-security-and-invariants.md).
 
-If the Pyth (or Switchboard) feed for a market goes stale beyond
-`max_staleness_slots`, **every read against that oracle reverts**.
-Symptoms:
 
-- You can't place new orders on that market until the feed comes
-  back.
-- You can't be liquidated on that market either, but you also can't
-  *close* yourself.
-- Funding for that market freezes (no funding accrual until the
-  next successful `update_funding`).
+## Implementation reference
 
-Pyth pull updates can be triggered by anyone. If your bot stalls
-because of staleness, push a fresh price update yourself.
-
-### Relayer outage
-
-If the relayer is down, your intents can't be sequenced via the
-fast path. You can still:
-
-- Submit through the **direct fallback pool** (see
-  [21 - Direct Fallback Pool](21-direct-fallback.md)) — your intent
-  is staged on chain and the on-chain executor will admit it after
-  the speed-bump.
-- Use the on-chain `perp_cancel_*` instructions directly with
-  Anchor — these don't go through the queue at all (they're admin-
-  free instructions that operate on the orderbook directly).
-
-### Solana congestion
-
-Solana periodically experiences periods of high congestion. During
-these, transactions may not land for tens of seconds. Implications:
-
-- Settle PnL bonuses are highly competitive and may take retries.
-- Liquidation racing is competitive; the first to land wins. If
-  you're a liquidator bot, use priority fees.
-- A user's `cancel` may not land in time. Always assume the order
-  could fill before your cancel does.
-
-### Stable-price drag
-
-When the oracle moves quickly, your `init_health` lags because the
-stable price hasn't caught up. This is **protective for the system**
-but means your effective borrowing power is reduced during volatile
-moves. Plan accordingly: don't compute "max position" off the
-oracle alone.
-
-## Self-trade and replay protection
-
-Self-trade prevention modes do exactly what they say. If you set
-`AbortTransaction` and your bot accidentally collides with its own
-order, the entire intent fails — and a slot in the v5 queue is
-burned. Use `CancelProvide` if you want a never-fail replace flow.
-
-The on-chain replay cache rejects identical intents within `~10`
-slots / `512` entries. If you replay a signed intent quickly, the
-second submission gets `ExecutionQueueV5IntentReplay`. Sign a fresh
-intent (with new nonce / `client_order_id`) for each retry.
-
-## What the protocol does **not** protect you from
-
-- Bugs in your own off-chain code (wrong size, wrong direction,
-  wrong account).
-- Wallet compromise or signing-key theft.
-- RPC outages / bad blockhashes.
-- Loss of access to your authority keypair.
-- Off-protocol scams (social engineering, fake "Fermi" sites, etc.).
-
-## What the protocol **does** protect you from
-
-- A malicious v1 sequencer/relayer can't silently reorder your
-  transactions relative to the emitted
-  [POSq order](30-posq-sequencing.md) — encrypted VDF ticks, the
-  commitment trail, and on-chain AMQ queue commits make reordering
-  detectable.
-- A malicious relayer can't substitute account lists — the canonical
-  user-intent message (`canonical_user_intent_message_v2`,
-  `instructions/execution_queue_v5.rs:671-682`) binds the account
-  list into the user's signature.
-- A replayed signature can't fire your order twice — the on-chain
-  replay cache catches it.
-- The relayer can't take custody of your funds — every state-
-  modifying instruction requires *your* (or your delegate's)
-  signature, verified inside the on-chain program.
-- The matcher can't fill you at a worse price than `max_quote_lots`
-  caps — set both base and quote caps for hard slippage limits.
-
-## Recovery paths
-
-If you find yourself unable to act on the system:
-
-1. **Check the trace endpoint.** `/trace/sequence/{market}/{seq}`
-   reports every stage of an intent (or absence of it). Most "lost
-   orders" turn out to be intents that never reached the POSq/relayer
-   fast path.
-2. **Use direct submission.** Bypasses the fast path entirely for
-   cancellation / close-only flows.
-3. **Use the Anchor IDL directly.** All `perp_cancel_*`,
-   `token_withdraw`, etc. are direct on-chain instructions you can
-   sign and submit yourself with no execution queue at all.
-4. **Reach out to support.** See [29 - Support](29-support.md).
-
-## Jurisdictional note
-
-Fermi is open-source software deployed to a public blockchain. Use
-of perpetual futures may be restricted in your jurisdiction. Operators
-of front-end UIs are responsible for restricting access where
-required by law; the on-chain program is permissionless.
-
-If you're unsure whether you're allowed to trade perps where you
-live, **don't trade until you've checked**. The protocol cannot
-return funds based on jurisdiction-after-the-fact.
+Reviewed at `90267b20`. [execution_queue_v5.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/execution_queue_v5.rs) · [recovery.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/instructions/recovery.rs) · [common.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/instructions/common.rs). Source links require access to the implementation repository.

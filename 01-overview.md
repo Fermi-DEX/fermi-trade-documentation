@@ -1,133 +1,34 @@
-# 01 · Overview
+# What Fermi does
 
-Fermi-v1 is a **non-custodial, fully on-chain perpetual-futures exchange**
-on Solana. Traders self-custody collateral and sign their own orders;
-order placement, cancels, matching, fills, risk checks, funding, and
-liquidation all execute through the deployed program. There is no
-off-chain matching engine, no off-chain risk database, no escrow account.
+A perpetual future gives a trader price exposure without owning the underlying asset. Fermi records that exposure as a base position and a quote balance. Traders post collateral, submit orders, and trade against other orders on an on-chain book. Funding transfers value between longs and shorts to relate the perpetual market to its oracle reference.
 
-Fermi-v1 is built around four cleanly separated components:
+The essential separation is between **deciding the order of requests**, **executing them**, and **showing the likely result**.
 
-1. The **on-chain exchange program** — a Solana program that owns order
-   placement, cancels, the order book, the matching engine, the risk
-   engine, funding, and liquidation. It is the single source of truth
-   for execution.
-2. The **[POSq sequencing layer](30-posq-sequencing.md)**, which orders
-   encrypted transactions over VDF ticks before they are revealed. In v1
-   POSq runs in single-sequencer mode, making reordering detectable
-   rather than hidden in a black-box sequencer. V2 is planned to add
-   voting, leader rotation, and permissionless participation.
-3. A **per-market AMQ-style commit/reveal execution queue** (the v5
-   queue) built into that program, which anchors the POSq order on chain
-   before intents touch the book.
-4. The **optimistic harness** — an off-chain read layer that
-   publishes optimistic and confirmed state to traders over
-   HTTP / SSE, so they see their orders reflected in milliseconds
-   while on-chain finality follows behind.
+| Component | Responsibility | Authority |
+| --- | --- | --- |
+| Wallet and client | Construct and sign an exact intent | Authorize the requested action |
+| Sequencing / relayer service | Admit requests, allocate market sequences, submit commitments | Controls admission and transaction delivery |
+| On-chain AMQ | Store commitments and resolve heads in sequence | Enforces the committed market order |
+| On-chain exchange | Match, check health, update positions and accounting | Determines valid economic transitions |
+| Executor and keepers | Reveal requests, consume events, update funding, settle and liquidate | Supply transactions; program checks their effects |
+| Harness and downstream read services | Preplay and reconcile books, orders, fills and accounts | Provide provisional and chain-derived views |
+| FLP vault | Pool USDC and manage shares, deposits and exits | Enforces vault accounting through a separate program |
 
-See [02 - Architecture](02-architecture.md) for how these pieces fit
-together and why the design is both fast and fair.
+## Where funds live
 
-## What you get
+Deposited trading tokens sit in program-controlled bank vaults. A FermiAccount records the owner's indexed balances, debts, positions and orders. The wallet remains the authorization source, but deposited assets are subject to program rules, margin, liquidation, bank liquidity and upgrade authority.
 
-- **Cross-collateral perps.** Spot deposits (USDC, SOL, ETH, BTC, …)
-  back perp positions across all markets in the group. Health is a
-  single signed-USD number.
-- **FIFO orderbook.** Two trees per side — fixed price and oracle-
-  pegged — both ordered strictly by price-time, enforced through the
-  on-chain AMQ-style execution queue.
-- **Verifiable order sequencing.** [POSq](30-posq-sequencing.md)
-  sequences encrypted intents over VDF ticks, then every order is
-  hash-committed on chain *before* it executes. Reordering relative to
-  the emitted POSq sequence is detectable.
-- **Replay protection.** A 10-slot, 512-entry intent-hash cache makes
-  signature replay impossible.
-- **Censorship fallback.** A direct-submission pool lets users get
-  orders into the queue even if the v1 fast path is offline or refusing
-  admission.
-- **Public, low-latency reads.** The optimistic harness pre-plays the
-  deterministic on-chain path and exposes optimistic order-book and
-  account state over SSE; the fanout service scales it horizontally.
+FLP adds another layer: a vault PDA owns a FermiAccount, and a delegate trades its inventory. LPs hold non-transferable shares in that pool. Public pre-deposit principal, active trading equity, and funded withdrawal cash have different exposure and live in different places.
 
-## The stack at a glance
+## What “fully on-chain execution” means
 
-```
-                ┌─────────────────────────────────────────────┐
-                │             Wallet / SDK / UI               │
-                └────┬─────────────────────┬─────────────┬────┘
-       sign+submit   │  read state         │  read events│
-                     ▼                     ▼             ▼
-            ┌────────────────┐  ┌─────────────────┐ ┌──────────┐
-            │   Relayer      │  │  Optimistic     │ │ Fanout   │
-            │   (gRPC :9090) │  │   harness       │ │ (SSE)    │
-            │                │  │  (HTTP/SSE)     │ │          │
-            └────────┬───────┘  └────────┬────────┘ └─────┬────┘
-                     │                   ▲                ▲
-            commit + reveal              │ on-chain reads │
-                     ▼                   │                │
-            ┌────────────────────────────┴────────────────┴────┐
-            │       Fermi-v1 on-chain exchange program          │
-            │                                                   │
-            │  Group · Bank · FermiAccount · PerpMarket         │
-            │  BookSide · EventQueue · ExecutionQueueV5         │
-            └───────────────────────────────────────────────────┘
-                                Solana mainnet-beta
-```
+The relayer cannot make an optimistic fill settle by writing it into a database. The program must accept the signed payload and execute the order against the on-chain book. Fill events, event consumption, funding and PnL settlement are also on-chain operations. A harness prediction can disappear if execution fails or chain state differs.
 
-A trade lives the following lifecycle:
+This does not mean that every system component runs on chain. Admission, sequencing, transaction delivery, keeper scheduling and fast reads rely on off-chain services. Their availability affects users even when the program's accounting checks remain intact.
 
-1. **Sign**: SDK builds a v5-canonical intent payload and the user
-   signs it (wallet pop-up or programmatic Ed25519 signature).
-2. **Submit**: SDK sends the encrypted intent to the POSq/relayer fast
-   path over gRPC.
-3. **Pre-validate**: fast-path services check signature, account staleness,
-   oracle freshness, health, and reduce-only rules off-chain.
-4. **Sequence & commit**: POSq assigns the intent to a VDF tick/order;
-   the relayer batches up to 64 commits and writes them to the per-market
-   `ExecutionQueueV5` ring.
-5. **Reveal & execute**: in a later transaction, the executor
-   reveals the payload; the program re-hashes it, verifies the user
-   signature, runs the order through the on-chain Fermi handler, and
-   advances the queue head.
-6. **Stream**: the executor emits a `FillLogV3` (or `OutEvent`); the
-   fanout service propagates it over SSE.
-7. **Settle / fund**: PnL is settled by anyone calling
-   `perp_settle_pnl`; funding accrues continuously and is paid at
-   `perp_update_funding`.
+Continue with [architecture](02-architecture.md) and [security boundaries](37-security-and-invariants.md).
 
-## What is *not* off-chain
 
-The matching engine, risk engine, liquidator, oracle, fee accrual,
-funding accrual, settlement, and bankruptcy resolution are all in
-the on-chain program. POSq/relayer services provide **verifiable
-sequencing, submission, and pre-flight validation only**. If the v1 fast
-path refuses an intent before admission, the chain state is unaffected
-and the direct path remains available; if it reorders relative to the
-emitted POSq sequence, the VDF-tick/commit trail makes that detectable.
+## Implementation reference
 
-## Properties at a glance
-
-| Property | Mechanism |
-|---|---|
-| Self-custody | Fermi account is a PDA you own; only your signature can mutate it. |
-| Verifiable ordering | [POSq](30-posq-sequencing.md) encrypted VDF ticks + per-market sequence + hash commit prior to reveal. |
-| Replay-proof | On-chain `replay_cache` of consumed intent hashes (10 slots / 512 entries). |
-| FIFO matching | Composite `(price, !seq)` keys for bids and `(price, seq)` for asks. |
-| Censorship fallback | Direct-submit pool with a fixed slot speed-bump. |
-| Margin safety | Three weighted health values: `init`, `maint`, `liquidation_end`. |
-| Liquidation liveness | Anyone can liquidate; insurance fund + socialization tail. |
-| Oracle attack resistance | Init health uses a stable price band; oracles checked for staleness and confidence. |
-| Operational visibility | Every stage of an intent emits a structured event; trace by `(market, seq)`. |
-
-## Where to next
-
-- **Investor / evaluator?** Read [02 - Architecture](02-architecture.md)
-  for the system design, trust model, and viability case.
-- **Trader?** Start with [03 - Getting Started](03-getting-started.md)
-  → [12 - Order Types](12-order-types.md) → [15 - Margin & Health](15-margin-and-health.md).
-- **Bot author?** Read [22 - Trader Workflow](22-trader-workflow.md) and
-  [26 - gRPC API](26-api-grpc.md).
-- **Liquidator?** [17 - Liquidation](17-liquidation.md) is the canonical
-  reference; pair it with [18 - Bankruptcy](18-bankruptcy-insurance.md).
-- **Protocol integrator (CPI)?** [24 - Direct CPI](24-direct-cpi.md)
-  shows the on-chain instruction shape and required preinstructions.
+Reviewed at `90267b20`. [lib.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/lib.rs) · [fermi_account.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/fermi_account.rs) · [lib.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/flp-vault/programs/flp-vault/src/lib.rs). Source links require access to the implementation repository.

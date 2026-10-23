@@ -1,140 +1,33 @@
-# 20 · Direct Fallback Pool
+# Direct submission and its limits
 
-[POSq/relayer](30-posq-sequencing.md) is the fast path on Fermi. In v1
-it runs with a single sequencer that orders encrypted transactions over
-VDF ticks, making reordering detectable. If you can't reach that fast
-path, or if it refuses admission before your intent enters the POSq log,
-there is a permissionless on-chain alternative: the **direct submission
-pool**.
+The v5 direct pool is an alternative admission path that does not require a CTM commitment batch. It is a separate per-market account. A user stages an authorized payload there; after a speedbump, it can be promoted into the main AMQ sequence and executed under the queue's checks.
 
-## What it is
+This path is useful only if the deployment creates, enables and services the pool. Newly initialized direct ingress is paused. A source implementation alone does not establish that users have an available fallback on a particular market.
 
-`execution_queue_v5_enqueue_direct_market` is an on-chain
-instruction that lets any signer push an intent directly into the
-per-market queue, **bypassing the relayer entirely**.
+## Lifecycle
 
-Once staged in the direct pool, the executor (or any keeper) can
-promote it into the main ring after a fixed slot speed-bump, and
-from then on it follows the standard AMQ-style reveal/execute path.
-
-## When to use it
-
-- **Fast-path outage.** You need to cancel an order or close a
-  position and POSq/relayer is unreachable.
-- **Pre-admission censorship concern.** A v1 sequencer/relayer that
-  refuses to admit your intent (whether by accident or design) can be
-  bypassed.
-- **Programmatic on-chain integrations.** Another Solana program
-  wants to invoke a Fermi order via CPI without involving any off-
-  chain service. See [24 - Direct CPI](24-direct-cpi.md).
-
-When **not** to use it:
-
-- **Latency-sensitive trading.** The direct path has a built-in
-  speed-bump (configurable; tens of slots typical) before it can be
-  executed. The relayer path is faster.
-- **Routine flow.** The relayer is cheaper (CPU, fees) and handles
-  retries, optimistic state, and account hot-cache for you.
-
-## Mechanics
-
-The direct pool is a separate per-market staging area. The user
-submits a transaction that includes:
-
-1. The signed intent payload (same canonical form the relayer would
-   commit).
-2. The full account list the intent will touch (fermi account,
-   perp market, bank, oracle, etc.).
-3. An Ed25519 preinstruction proving the user signed the payload.
-
-The on-chain program:
-
-1. Verifies the user's signature (Ed25519 preinstruction must match
-   the intent's canonical message).
-2. Hashes the payload and accounts.
-3. Stages the item in a per-market direct pool with `min_execute_slot
-   = current_slot + direct_speedbump_slots`.
-
-After the speed-bump, the executor (or any caller) can promote the
-direct entry into the main ring by assigning it a sequence and
-calling the standard reveal/execute path. The reveal path then runs the
-same deterministic queue verification + dispatch as a relayer-committed
-intent.
-
-## Direct pool vs main ring
-
-| | Direct pool | Main ring |
-|---|---|---|
-| Path | User → on-chain direct pool → promote → execute | User → relayer → commit → reveal → execute |
-| Sequence assigned | At promotion time | At commit time |
-| Latency | `≥ direct_speedbump_slots` (tens of slots) | Sub-second once relayer admits |
-| Throughput | Lower (every direct submit is its own tx) | Higher (relayer batches up to 64 commits) |
-| Fee paid by | User (full Solana tx fee) | Relayer (committed batch) |
-| Replay protection | Same on-chain `replay_cache` | Same on-chain `replay_cache` |
-
-## Programmatic submission
-
-```ts
-import { buildDirectEnqueueIx, signIntent } from '@fermi/client';
-
-const intent = await client.buildPerpPlaceOrderIntent(fermiAccount, perp, order);
-const signed = await signIntent(intent, owner);
-
-const ix = await buildDirectEnqueueIx(client, group, perp, signed);
-
-const tx = new Transaction().add(
-  Ed25519Program.createInstructionWithPublicKey({
-    publicKey: owner.publicKey.toBytes(),
-    message: signed.canonicalMessage,
-    signature: signed.signature,
-  }),
-  ix,
-);
-
-await sendAndConfirmTransaction(connection, tx, [owner /* fee payer */]);
+```text
+signed direct intent → staged pool item → eligible after delay
+                    → promoted main-queue sequence → execution or failure
 ```
 
-The fee payer can be any signer; only the user's signature on the
-*payload* is verified.
+The PDA seeds are `execution-queue-v5-direct`, group and market index. The reviewed pool has 256 slots and a default speedbump of 10 slots. A configured speedbump can differ.
 
-## Speedbump configuration
+The signature domain is `mango-v5-direct-intent-v1`. It binds the account/signer context, target, payload hash, account hash, expiry and nonce. This differs from the CTM intent format. Use the corresponding helper; a signature for one path is not interchangeable with the other.
 
-The speed-bump is per-market and configurable. Default is conservative
-(tens of slots ≈ several seconds). It exists because:
+## Timing and ordering
 
-- It deters spam: each direct submit is a full Solana tx, but a
-  hostile flood would still be expensive.
-- It gives the relayer a chance to admit the intent first if the
-  user wants to "race" — the relayer path is faster.
+Direct admission requires a nonzero expiry that covers the speedbump and satisfies the program's maximum horizon. Promotion assigns a sequence in the main queue. From then on, the item follows that sequence, not its original network send time.
 
-The exact value is exposed in the `ExecutionQueueV5Header` /
-`SubQueueHeaderV5` and can be queried via the SDK.
+The speedbump leaves room for normal CTM commitments to land. It does not establish a universal FCFS order between every direct sender and every relayed sender. Direct payload visibility also differs from hash-only CTM commitments.
 
-## Cancellation through direct path
+## Availability boundary
 
-The most common production use of the direct path is **cancellation
-under relayer outage**:
+Direct submission still needs Solana inclusion, an enabled pool, capacity, valid accounts, valid signatures, usable oracle data and an executor/keeper to make progress. It cannot bypass margin checks or an execution pause.
 
-```ts
-const cancelIntent = await client.buildPerpCancelOrderIntent(
-  fermiAccount, perp, orderId,
-);
-const signed = await signIntent(cancelIntent, owner);
-const ix     = await buildDirectEnqueueIx(client, group, perp, signed);
-await connection.sendTransaction(buildEd25519PreIxTx(signed, ix), [owner]);
-```
+Before advertising it as a censorship fallback, inspect each market's pool and demonstrate enqueue, promotion and execution. A UI should distinguish “pool unavailable” from “request invalid” and expose the staged item ID and promoted sequence for tracing.
 
-This is the recommended fallback if the relayer is down and you
-need to remove a resting order before the market moves.
 
-## Limits
+## Implementation reference
 
-- The direct pool has a fixed per-market capacity (smaller than the
-  main ring). If saturated, new submissions are rejected with
-  `ExecutionQueueDirectPoolFull`.
-- The direct path **does not bypass health checks** — your intent
-  still has to be valid at execution time. If your account is
-  liquidatable, your direct-submitted place order will still fail.
-- The direct path does not bypass the replay cache. The same
-  10-slot / 512-entry window applies; re-signing a fresh intent
-  (different nonce / client order id) is required for retries.
+Reviewed at `90267b20`. [execution_queue_v5_direct.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/state/execution_queue_v5_direct.rs) · [execution_queue_v5.rs](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/programs/mango-v4/src/instructions/execution_queue_v5.rs) · [executionQueue.ts](https://github.com/Fermi-DEX/fermi-v1/blob/90267b20df99d0eacf35dbd407c67c33d809172b/ts/client/src/executionQueue.ts). Source links require access to the implementation repository.
