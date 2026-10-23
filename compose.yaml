@@ -1,0 +1,56 @@
+name: fermi-docs
+services:
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        DOCS_DOMAIN: ${DOCS_DOMAIN:-docs.fermi.trade}
+      secrets: [proxy_ca]
+    restart: unless-stopped
+    ports: ['80:80', '443:443', '443:443/udp']
+    environment:
+      DOCS_DOMAIN: ${DOCS_DOMAIN:-docs.fermi.trade}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1},oauth
+      no_proxy: ${NO_PROXY:-localhost,127.0.0.1},oauth
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      oauth:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-Y', 'off', '-q', '-O', '/dev/null', 'http://127.0.0.1/healthz']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '3' }
+  oauth:
+    build:
+      context: .
+      target: oauth
+    restart: unless-stopped
+    environment:
+      SITE_URL: https://${DOCS_DOMAIN:-docs.fermi.trade}
+      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID:-}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-}
+      OAUTH_SCOPE: ${OAUTH_SCOPE:-repo}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '3' }
+volumes:
+  caddy_data:
+  caddy_config:
+secrets:
+  proxy_ca:
+    file: ${BUILD_CA_FILE:-./deploy/build-ca.pem}

@@ -1,0 +1,26 @@
+{
+  "name": "fermi-trade-documentation",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "prepare:content": "node scripts/prepare-content.mjs",
+    "dev": "npm run prepare:content && astro dev",
+    "build": "npm run prepare:content && astro build",
+    "preview": "astro preview",
+    "test": "node --test tests/*.test.mjs",
+    "check:site": "node scripts/check-site.mjs"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "7.3.0",
+    "@astrojs/starlight": "0.42.6",
+    "astro": "7.4.2",
+    "decap-cms": "3.17.1"
+  },
+  "devDependencies": {
+    "linkedom": "0.18.12"
+  }
+}

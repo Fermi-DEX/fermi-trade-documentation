@@ -1,0 +1,34 @@
+(docs) {
+    root * /srv
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+    handle /healthz {
+        respond "ok" 200
+    }
+    handle_path /oauth/* {
+        reverse_proxy oauth:3000
+    }
+    handle {
+        file_server
+    }
+    handle_errors {
+        rewrite * /404.html
+        file_server
+    }
+}
+
+{$DOCS_DOMAIN:docs.fermi.trade} {
+    import docs
+}
+
+# The VM's IP serves a pre-DNS smoke check. Editor login always uses HTTPS.
+http://:80 {
+    @canonical host {$DOCS_DOMAIN:docs.fermi.trade}
+    redir @canonical https://{host}{uri} 308
+    import docs
+}

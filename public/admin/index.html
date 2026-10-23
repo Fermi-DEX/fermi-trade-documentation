@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Fermi · Documentation editor</title>
+    <link rel="icon" href="/favicon.svg" />
+    <style>
+      body{margin:0;background:#f3f6ee!important;color:#273d2e;font-family:system-ui,sans-serif}
+      .startup{padding:2rem;max-width:45rem;line-height:1.7}.startup a{color:#336a40}
+      button,input,select,textarea{border-radius:2px!important}
+      button[class*="LoginButton"]{background:#20482c!important;box-shadow:none!important}
+      :focus-visible{outline:2px solid #336a40;outline-offset:3px}
+    </style>
+  </head>
+  <body>
+    <div class="startup" id="startup">Loading the Fermi Markdown editor…</div>
+    <script>
+      window.addEventListener('load', async () => {
+        const notice = document.getElementById('startup');
+        try {
+          const response = await fetch('/oauth/status', { cache: 'no-store' });
+          const status = await response.json();
+          if (!status.configured) {
+            notice.innerHTML = 'Browser editing needs GitHub OAuth setup. Ask the VM administrator to rerun <code>sudo ./setup.sh --configure</code>. You can also <a href="https://github.com/Fermi-DEX/fermi-trade-documentation">edit the Markdown on GitHub</a>.';
+            return;
+          }
+          notice.remove();
+          const script = document.createElement('script');
+          script.src = '/admin/assets/decap-cms.js';
+          script.onerror = () => { document.body.textContent = 'The editor could not load. Refresh or edit the Markdown on GitHub.'; };
+          document.body.append(script);
+        } catch {
+          notice.textContent = 'The editor authentication service is unavailable. The public documentation is still available.';
+        }
+      });
+    </script>
+  </body>
+</html>
