@@ -1,4 +1,4 @@
-# mainnet deployment
+# Mainnet deployment
 
 This page records the mainnet deployment and the public-reader observation on 27 October 2026.
 The observed slot was `462120926`.

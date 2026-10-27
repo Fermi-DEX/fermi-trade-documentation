@@ -1,4 +1,4 @@
-# withdrawals and epochs
+# Withdrawals and epochs
 
 A withdrawal has three separate steps: request, funding, and claim.
 A successful request does not mean that USDC is ready to transfer to the wallet.

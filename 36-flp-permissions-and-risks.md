@@ -1,4 +1,4 @@
-# permissions and risks
+# Permissions and risks
 
 FLP separates program authority, administration, and trading delegation.
 These roles have different powers. A deposit approval is not a trading delegation.

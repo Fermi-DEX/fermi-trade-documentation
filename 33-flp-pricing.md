@@ -1,4 +1,4 @@
-# share pricing and fees
+# Share pricing and fees
 
 NAV means net asset value. FLP calculates NAV from its supported trading assets and liabilities, including idle USDC.
 Deposit and redemption escrows are excluded.

@@ -1,4 +1,4 @@
-# vaults
+# Vaults
 
 FLP is a pooled liquidity vault for Fermi perpetual markets. Users deposit USDC and receive shares in the vault.
 A trading delegate manages the vault account. Gains, losses, funding payments, and trading costs change the value of each share.

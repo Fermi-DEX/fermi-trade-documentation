@@ -1,4 +1,4 @@
-# reader API and integration
+# Reader API and integration
 
 The hosted mainnet reader reports FLP state. It does not build transactions, sign for users, or hold their keys.
 
