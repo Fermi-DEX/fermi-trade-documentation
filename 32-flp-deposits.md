@@ -1,4 +1,4 @@
-# FLP deposits and graduation
+# deposits and graduation
 
 FLP has three entry paths. The vault mode and wallet approval determine which path applies.
 

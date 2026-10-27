@@ -1,4 +1,4 @@
-# FLP stressed withdrawals and recovery
+# stressed withdrawals and recovery
 
 A deferred withdrawal does not automatically mean an emergency.
 The vault can have sufficient equity but lack immediately available USDC.
