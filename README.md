@@ -89,6 +89,17 @@ evaluating the system. It explains both *how Fermi-v1 works* and
   margin, and recovery.
 - **[29 - Support](29-support.md)** — Where to get help.
 
+### FLP vaults
+
+- [FLP overview](31-flp-vaults.md) — The pool, shares, and lifecycle.
+- [Deposits and graduation](32-flp-deposits.md) — Public escrow, approved entry, and queued entry.
+- [Share pricing and fees](33-flp-pricing.md) — NAV, unsettled PnL, and dilution.
+- [Withdrawals and epochs](34-flp-withdrawals.md) — Request, funding, and claim.
+- [Stressed withdrawals and recovery](35-flp-recovery.md) — Routine funding and emergency paths.
+- [Permissions and risks](36-flp-permissions-and-risks.md) — Roles, pauses, upgrades, and material risks.
+- [Mainnet deployment](37-flp-deployment.md) — Current addresses, parameters, and verification evidence.
+- [Reader API and integration](38-flp-integration.md) — Routes, units, freshness, and user state.
+
 ## Conventions used in these docs
 
 - Every formula is taken from the on-chain code; the source file and
@@ -105,7 +116,11 @@ evaluating the system. It explains both *how Fermi-v1 works* and
   *signature* is the on-chain tx hash you can look up on a block
   explorer.
 
-## Network deployment
+## Earlier core deployment
+
+The following table identifies an earlier core deployment.
+The current FLP vault uses Fermi r9, `FRMiX94PWHbndvySq8xyRx185GvPeggUeKaLmZgVdd4`.
+See [FLP mainnet deployment](37-flp-deployment.md) for its current group and vault addresses.
 
 | Field | Value |
 |---|---|

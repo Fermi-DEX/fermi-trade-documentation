@@ -11,6 +11,7 @@ export const navigation = [
   group('Risk & PnL', ['margin-and-health', 'entry-pnl', 'liquidation', 'bankruptcy-insurance', 'risk-warning']),
   group('Execution & sequencing', ['execution-queue', 'direct-fallback', 'posq-sequencing']),
   group('Integrate', ['trader-workflow', 'sdk', 'direct-cpi', 'api-http', 'api-grpc', 'streams']),
+  group('FLP vaults', ['flp-vaults', 'flp-deposits', 'flp-pricing', 'flp-withdrawals', 'flp-recovery', 'flp-permissions-and-risks', 'flp-deployment', 'flp-integration']),
   group('Help', ['faq', 'support']),
   { label: 'Edit documentation', link: '/admin/' },
 ];
